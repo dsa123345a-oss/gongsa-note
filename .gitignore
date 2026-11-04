@@ -1,0 +1,28 @@
+# Only application source and synthetic tests belong in this repository.
+__pycache__/
+*.pyc
+node_modules/
+.venv/
+build/
+release/
+seed/*
+.openai/
+공사노트 자료/
+*.exe
+*.part
+*.sqlite*
+*.db
+*.estx
+*.ebkx
+*.hwp
+*.xlsx
+*.xls
+*.gongsa
+*.gongsa.json
+*.log
+*project.json
+사용방법.txt
+공사노트 실행.cmd
+# The two approved default DBs are versioned and bundled with releases.
+!seed/2026-10-main.estx
+!seed/상수도공사메인(26년)소형감압변 수정.ebkx

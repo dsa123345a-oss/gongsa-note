@@ -1,0 +1,155 @@
+/* Legible desktop text, while retaining the compact command bars. */
+@media screen{
+ body.est-desktop{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#202c3a;--muted:#495b6c}
+ .est-desktop button,.est-desktop input,.est-desktop select,.est-desktop textarea{font-family:inherit}
+ .est-desktop .desktop-menu summary{font-size:13px;color:#243447;padding:4px 8px}
+ .est-desktop .resource-toolbar .est-tool{font-size:12px;color:#273e54}
+ .est-desktop .desktop-menu-items button{font-size:13px;color:#202c3a}
+ .est-desktop .project-tree button{font-size:13px;color:#263c51}
+ .est-desktop .project-tree button small,.project-tree b{font-size:12px;color:#465b70}
+ #estimateTable .est-grid,#estimateTable .est-grid .cell-input{font-size:14px;color:#202c3a}
+ #estimateTable .est-grid td{height:30px;color:#202c3a}
+ #estimateTable .est-grid th{font-size:13px;color:#243d55}
+ #estimateTable .est-grid .cell-input{height:27px}
+ #estimateTable .est-grid .status-button,#estimateTable .est-grid .bucket,#estimateTable .est-grid .row-actions .button,#estimateTable .est-grid .level-cell input{font-size:12px}
+ #estimateTable .est-grid .unit-cost,#estimateTable .est-grid .line-total{color:#204c81}
+ .est-desktop .hint,.est-desktop .notice,.est-desktop #rowHint,.est-desktop #estimateView .panel-footer{font-size:12px;color:#495b6c}
+ dialog{color:#202c3a}
+ dialog .dialog-head{cursor:move;touch-action:none}
+ dialog .dialog-head h2{color:#233c53}
+ dialog .dialog-head p,dialog small{color:#495b6c}
+ #matchDialog .dialog-head h2{font-size:15px;font-weight:700}
+ #matchDialog .dialog-head p{font-size:12px;color:#495b6c}
+ #matchDialog .match-search input{font-size:14px;color:#202c3a}
+ #matchDialog .match-search select{font-size:12px;width:135px}
+ #matchDialog .db-categories .chip{font-size:13px;padding:4px 9px}
+ #matchDialog .db-window-head{padding:6px 8px;flex-wrap:wrap}
+ #matchDialog .db-window-head strong{font-size:12px;color:#253d55;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+ #matchDialog .db-window-head>span:last-child,#matchDialog .db-tag{font-size:12px;color:#344d66}
+ #matchDialog .candidate{min-height:54px;padding:6px 8px;grid-template-columns:16px minmax(0,1fr) 82px;gap:7px}
+ #matchDialog .candidate strong{font-size:14px;font-weight:600;color:#202c3a}
+ #matchDialog .candidate small{font-size:12px;color:#495b6c;line-height:1.5}
+ #matchDialog .candidate .price,#matchDialog .candidate .price strong{font-size:14px;color:#204c81;font-weight:600}
+ #matchDialog .db-window-footer,#matchDialog .db-window-footer .button,#matchDialog .manual-action .button,#matchDialog .selected-rate,#matchDialog .breakdown span,#matchDialog .breakdown strong,#matchDialog .related-notice:not(.exact-notice){font-size:12px;color:#43596e}
+ #matchDialog .dialog-actions .button{font-size:13px}
+ #matchDialog .dialog-actions .button.primary{color:white}
+ #matchDialog .selected-rate{max-height:120px}
+ .auto-link-results{font-size:14px}.auto-link-results small{font-size:12px;color:#495b6c}
+ .auto-link-controls{flex-wrap:wrap}.auto-link-controls select{max-width:min(620px,75vw);font-size:14px}
+ .auto-priority-note{padding:0 22px;margin:0 0 10px;font-size:12px;color:#43596e}
+ .workspace-window{position:fixed;inset:94px auto auto 205px;margin:0;padding:0;width:calc(100vw - 225px);height:calc(100vh - 145px);min-width:min(560px,95vw);min-height:230px;max-width:calc(100vw - 16px);max-height:calc(100vh - 80px);resize:both;overflow:hidden;border:1px solid #8da6bf;border-radius:3px;box-shadow:0 8px 28px #19334c40;background:#f6f9fc}
+ .workspace-window[open]{display:flex;flex-direction:column}
+ .workspace-window>.dialog-head{padding:5px 10px;min-height:35px;margin:0;flex:none;background:#d8e6f5;border-bottom:1px solid #a6bbcf;gap:12px}
+ .workspace-window .workspace-window-head h2{margin:0;font-size:14px;white-space:nowrap}
+ .workspace-window .window-hint{margin-left:auto;font-size:12px;color:#465e75}
+ .workspace-window .icon-btn{padding:0;width:27px;height:25px;flex:none;font-size:20px;color:#344c64}
+ .workspace-window-body{flex:1;min-height:0;overflow:auto;padding:6px}
+ .workspace-window-body>section{height:100%}
+ .workspace-window-body .panel{margin:0;min-height:100%}
+ #summaryWindow .cost-panel{display:flex;flex-direction:column;height:100%;min-height:0;padding:6px 8px}
+ #summaryWindow #chargeTable{flex:1;min-height:100px;max-height:none}
+ .cost-sheet,.cost-sheet td,.cost-sheet input.charge-name,.cost-sheet input.charge-rate{font-size:13px;color:#202c3a}
+ .cost-sheet td{height:25px}.cost-sheet th{font-size:13px;height:26px}
+ .cost-sheet input.charge-name,.cost-sheet input.charge-rate,.cost-basis select{height:23px}
+ .cost-sheet .cost-group,.cost-sheet .cost-formula,.cost-basis select,.cost-basis span,.cost-sheet .cost-rate span,.cost-caption,.cost-footer,.cost-footer .review{font-size:12px;color:#3f5367}
+ #catalogWindow .db-window-body{height:clamp(180px,34vh,420px)}
+ .cost-title{flex-direction:column;align-items:stretch;gap:5px;padding-bottom:5px}
+ .cost-title h2{text-align:center;font-size:19px}
+ .cost-actions{position:static;justify-content:flex-end;flex-wrap:wrap}.cost-actions .button{font-size:12px;padding:4px 8px}
+ .cost-sheet tr.cost-selected td{background:#d3e6fa;box-shadow:inset 0 1px #83a7cb,inset 0 -1px #83a7cb}
+ #sheetDialog{width:1200px;max-width:96vw;max-height:92vh;overflow:auto}
+ .quantity-batch-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 18px}
+ .quantity-batch-controls label{font-size:13px;color:#273e54}.quantity-batch-controls input[type=number]{width:75px}.quantity-batch-controls input:not([type]){width:230px}
+ .quantity-batch-list{margin:0 18px;max-height:28vh;border:1px solid #b7c8d9}
+ .quantity-batch-list table{width:100%;font-size:13px}.quantity-batch-list th{text-align:center;background:#e1ecf7}.quantity-batch-list td{padding:5px}
+ .quantity-batch-list input{width:100%;min-width:190px;font-size:13px}.quantity-batch-list select{max-width:150px;font-size:13px}.quantity-batch-list td:first-child,.quantity-batch-list td:last-child{text-align:center;white-space:nowrap}
+ .quantity-batch-list small{display:block;font-size:12px}.quantity-batch-list .text-btn{font-size:13px;text-align:left;color:#234c76}
+ .quantity-current td{background:#e5eff9}#quantityPreviewTitle{padding:0 18px;font-size:13px;font-weight:600}
+ #sheetDialog #quantityPreview{margin:0 18px;max-height:26vh;font-size:13px}
+ #estimateTable .est-grid .unconfirmed-row .row-name .cell-input,#estimateTable .est-grid .unconfirmed-row .cell-spec{color:#ac1024;font-weight:600}
+ #estimateTable .est-grid .unconfirmed-row .status-button{background:#fff0f1;border:1px solid #bd2336;color:#a00d20;font-weight:700;font-size:12px;white-space:nowrap}
+ #estimateTable .est-grid .unconfirmed-row .line-total,#estimateTable .est-grid .unconfirmed-row .line-total .error-text{color:#b00020;font-weight:700}
+ #estimateTable .est-grid .unconfirmed-row .line-total{background:#ffe8ec!important}
+ #estimateTable .est-grid .heading-title{white-space:normal;padding:4px 8px!important;height:auto;text-align:left!important}
+ #estimateTable .est-grid textarea.heading-name{display:block;width:100%;min-width:420px;max-width:none;height:auto;min-height:26px;line-height:1.6;resize:vertical;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:600 14px/1.6 "Malgun Gothic",sans-serif;padding:1px 4px;border:1px solid transparent;background:transparent;color:#203c57;text-align:left!important}
+ #estimateTable .est-grid [data-heading-note]{display:block;font-size:12px;line-height:1.5;color:#4b6074;font-weight:400}
+ #estimateTable .est-grid .heading-row .grid-group{width:75px;font-size:12px}
+ .est-desktop .project-tree button.tree-sub{white-space:normal;overflow-wrap:anywhere;text-align:left;line-height:1.6;min-height:32px;height:auto}
+ @media(min-width:901px) and (max-width:1400px){.workspace-window{left:70px;width:calc(100vw - 90px)}}
+ @media(max-width:900px){.workspace-window{left:12px;width:calc(100vw - 24px)}.workspace-window .window-hint{display:none}}
+}
+
+#contractBudgetStatus.budget-status{flex-shrink:0;margin:0;padding:3px 8px;font-size:12px;line-height:1.5;color:#304b64;text-align:right}#contractBudgetStatus[hidden]{display:none}
+#workflowDialog{width:900px;max-width:96vw}#workflowDialog .work-table{max-height:280px;overflow:auto}#workflowDialog .work-fields{gap:14px}#workflowDialog input,#workflowDialog select{font-size:14px;min-height:32px}#workflowDialog .check{font-size:13px}
+
+#estimateTable .est-grid textarea.heading-name{box-sizing:border-box;min-width:0;width:100%;height:auto;overflow:hidden;resize:none;line-height:1.6;padding:3px 5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}
+#estimateTable .est-grid .heading-title{height:auto;vertical-align:middle;overflow:visible}
+#estimateTable .est-grid .heading-row .grid-group{min-width:70px;width:100%}
+#quantityImportButton{font-weight:700;color:#214d76;min-width:128px;border-color:#9eb6cf;background:#f8fbff}
+body.quantity-dragging::after{content:'수량산출서를 여기에 놓으세요 · 여러 파일 가능';position:fixed;inset:85px 12px 35px;z-index:10000;display:grid;place-items:center;background:#eef6ffe8;border:3px dashed #466f96;color:#203d59;font-size:23px;font-weight:700;pointer-events:none}
+.cost-sheet input.charge-formula{width:100%;min-width:160px;font:13px/1.6 Consolas,'Malgun Gothic',sans-serif;background:transparent;border:1px solid transparent;color:#193b59;padding:2px 4px}
+
+#estimateTable .est-grid textarea.grid-group{box-sizing:border-box;display:block;min-width:90px;width:90px!important;max-height:none;height:auto;min-height:30px;padding:3px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;resize:none;text-align:center;font:12px/1.6 "Malgun Gothic",sans-serif}
+
+/* Different hues make hierarchy visible without relying on the level number. */
+@media screen {
+ #estimateTable .est-grid tr[data-level] {--level-bg:#fff;--level-ink:#253443;--level-edge:#bac4cd}
+ #estimateTable .est-grid tr.heading-row {--level-bg:#eee5d5;--level-ink:#4a3923;--level-edge:#b69a70}
+ #estimateTable .est-grid tr[data-level="2"] {--level-bg:#dfedfa;--level-ink:#233e59;--level-edge:#8daecb}
+ #estimateTable .est-grid tr[data-level="1"] {--level-bg:#fff3cc;--level-ink:#51451f;--level-edge:#c5ae67}
+ #estimateTable .est-grid tr[data-level] > td {background:var(--level-bg)!important;color:var(--level-ink)}
+ #estimateTable .est-grid tr.heading-row > td {border-bottom-color:var(--level-edge)}
+ #estimateTable .est-grid tr.heading-row .cell-input,#estimateTable .est-grid tr.heading-row .level-cell input,#estimateTable .est-grid tr.heading-row [data-heading-note],#estimateTable .est-grid tr.heading-row .fold-heading {color:var(--level-ink);font-weight:600}
+ #estimateTable .est-grid tr[data-level] .level-cell {border-left:3px solid var(--level-edge)}
+ #estimateTable .est-grid tr[data-level].selected-line > td {box-shadow:inset 0 2px #35658a,inset 0 -2px #35658a}
+ #estimateTable .est-grid tr[data-level].selection-active > td:first-child {box-shadow:inset 3px 0 #184c7c,inset 0 2px #35658a,inset 0 -2px #35658a!important}
+ #estimateTable .est-grid tr.unconfirmed-row > td.line-total {background:#ffe8ec!important;color:#b00020}
+ #saveBeforeClose {width:560px;max-width:92vw;color:#253443;font-size:15px}
+ #saveBeforeClose p {line-height:1.7;margin:12px 18px}
+}
+
+#excelExportDialog{width:560px;max-width:94vw;color:#233443;font-size:14px}#excelExportDialog .export-options{padding:12px 20px}#excelExportDialog select{font-size:14px;min-height:32px}#excelSheetList{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:18px 0}#excelSheetList label{display:flex;align-items:center;gap:8px;line-height:1.5}#excelSheetList input{width:16px;height:16px}#excelPurposeNote{line-height:1.6}#excelSelectionNote{min-height:22px;color:#903322}
+
+@media screen {
+ .desktop-menubar .desktop-menu-direct{border:0;border-radius:0;background:transparent;font:13px "Malgun Gothic",sans-serif;color:#243447;padding:4px 8px;cursor:pointer}
+ .desktop-menubar .desktop-menu-direct:hover,.desktop-menubar .desktop-menu-direct:focus-visible{background:#e9f2fc;outline:1px solid #9ab3cc}
+ #summaryWindow{left:max(16px,calc((100vw - 1040px)/2));top:88px;width:min(1040px,calc(100vw - 64px));height:calc(100vh - 150px);min-width:min(800px,calc(100vw - 32px));box-shadow:0 12px 38px #19334c66;border:1px solid #7795b3}
+ #summaryWindow .cost-actions{display:none}
+ #summaryWindow .cost-sheet{min-width:790px}
+ #summaryWindow .cost-sheet col:nth-child(1){width:52px!important}
+ #summaryWindow .cost-sheet col:nth-child(2){width:225px!important}
+ #summaryWindow .cost-sheet col:nth-child(3){width:38px!important}
+ #summaryWindow .cost-sheet col:nth-child(4){width:50px!important}
+ #summaryWindow .cost-sheet col:nth-child(5){width:110px!important}
+ #summaryWindow .cost-sheet col:nth-child(6){width:90px!important}
+ #summaryWindow .cost-sheet col:nth-child(8){width:40px!important}
+ #summaryWindow .cost-name{padding-right:5px}
+ #summaryWindow .cost-name .delete-btn{display:none}
+ .cost-context-hint{color:#52677a;font-size:12px;margin-left:auto}
+ .cost-caption{flex-wrap:wrap;gap:4px 12px}
+ .cost-context-menu{position:fixed;z-index:10000;min-width:215px;max-height:calc(100vh - 16px);overflow:auto;padding:5px;background:#fff;border:1px solid #9aaebf;border-radius:3px;box-shadow:0 4px 18px #18314840}
+ .cost-context-menu[hidden]{display:none}
+ .cost-context-menu button{display:block;width:100%;padding:6px 13px;border:0;border-radius:2px;background:transparent;color:#203448;text-align:left;font:13px "Malgun Gothic",sans-serif;cursor:pointer}
+ .cost-context-menu button:hover,.cost-context-menu button:focus-visible{background:#e7f0fa;outline:0}
+ .cost-context-menu button:disabled{color:#929ba4;cursor:default;background:transparent}
+ .cost-context-menu hr{border:0;border-top:1px solid #dde4ea;margin:4px 5px}
+ @media(max-width:900px){#summaryWindow{left:16px;width:calc(100vw - 32px)}}
+}
+
+/* Category hues distinguish cost bases without coloring the printed documents. */
+@media screen {
+ #summaryWindow .cost-sheet thead th{background:#e9edf1;color:#283a49;border-color:#b7c3cd}
+ #summaryWindow .cost-sheet tr[data-cost-tone="material"]{--cost-fill:#f0f7ef;--cost-band:#deeddc;--cost-edge:#8bab83}
+ #summaryWindow .cost-sheet tr[data-cost-tone="labor"]{--cost-fill:#fff4e9;--cost-band:#f7e4cf;--cost-edge:#c29b70}
+ #summaryWindow .cost-sheet tr[data-cost-tone="expense"]{--cost-fill:#f5f1fa;--cost-band:#e9e1f2;--cost-edge:#ab95c1}
+ #summaryWindow .cost-sheet tr[data-cost-tone="summary"]{--cost-fill:#f7f8fa;--cost-band:#e5edf5;--cost-edge:#93aabf}
+ #summaryWindow .cost-sheet tr[data-cost-row="contract"],#summaryWindow .cost-sheet tr[data-cost-row="grand"]{--cost-fill:#fff7df;--cost-band:#f6e9bb;--cost-edge:#bfa65c}
+ #summaryWindow .cost-sheet tr[data-cost-tone] td{background:var(--cost-fill);color:#29333f;border-bottom-color:#ced3d9}
+ #summaryWindow .cost-sheet tr[data-cost-tone] .cost-group{background:var(--cost-band);color:#39454f;border-left:3px solid var(--cost-edge)}
+ #summaryWindow .cost-sheet tr.cost-subtotal td{background:var(--cost-band);border-top:1px solid var(--cost-edge);font-weight:700}
+ #summaryWindow .cost-sheet tr.cost-grand td{border-top:2px solid var(--cost-edge)}
+ #summaryWindow .cost-sheet tr.cost-selected td{box-shadow:inset 0 2px #486c8e,inset 0 -2px #486c8e}
+ #summaryWindow .cost-sheet tr.cost-selected td:first-child{box-shadow:inset 3px 0 #486c8e,inset 0 2px #486c8e,inset 0 -2px #486c8e}
+ #summaryWindow .cost-sheet tr.cost-no-print td{color:#66717d}
+ .surcharge-bid-label{font-size:12px;color:#345971;white-space:normal;line-height:1.4}
+}

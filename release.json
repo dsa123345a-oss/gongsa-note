@@ -1,0 +1,19 @@
+{
+  "version": "0.13.36",
+  "repository": "dsa123345a-oss/gongsa-note",
+  "distribution": "folder-v1",
+  "defaultDatabases": [
+    {
+      "name": "2026-10-main.estx",
+      "role": "resource",
+      "bytes": 21919992,
+      "sha256": "ab414a7f83b9ed725cefe3ae1b2b51c4c6662db2f9430faf428af164b57cab5e"
+    },
+    {
+      "name": "상수도공사메인(26년)소형감압변 수정.ebkx",
+      "role": "assembly",
+      "bytes": 783953,
+      "sha256": "175fafed64d675ee5f6d0abd114bd26d47e26dd87f03abb7c8c573a1b1c842cd"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+import {TABLE_LABELS} from './est.js';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const labels={_record:'원본 행',Code:'코드',TitleCode:'상위 코드',Name:'품명 / 제목',Size:'규격',Unite:'단위',GN:'수량',TU:'합계 단가',TC:'합계 금액',NC:'노무 금액',GC:'재료 금액',JC:'경비 금액',NU:'노무 단가',GU:'재료 단가',JU:'경비 단가',LineData:'원문 / 산식',Bigo:'비고',Level:'단계',Index:'순서',Cost1:'단가1',Cost2:'단가2',Cost3:'단가3'};
+export function setupRaw(getLibraries,download){
+ const $=id=>document.getElementById(id);let page=0,visible=[];
+ const lib=()=>getLibraries().find(l=>l.id===$('rawLibrary').value),table=()=>lib()?.tables?.find(t=>t.name===$('rawTable').value);
+ function tables(){const l=lib();$('rawTable').innerHTML=(l?.tables||[]).map(t=>`<option value="${esc(t.name)}">${esc(t.label)} · ${t.rows.length.toLocaleString()}행</option>`).join('');page=0;render();}
+ function refresh(){const old=$('rawLibrary').value;$('rawLibrary').innerHTML=getLibraries().map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');const selected=getLibraries().find(l=>l.id===old&&l.tables?.length)||getLibraries().find(l=>l.isMain&&l.tables?.length)||getLibraries().find(l=>l.tables?.length);if(selected)$('rawLibrary').value=selected.id;tables();}
+ function render(){const l=lib(),t=table();if(!t){$('rawContent').innerHTML='<div class="empty-state">전체 자료를 가져오려면 EST 파일을 다시 선택하세요.</div>';$('rawCoverage').textContent='전체 자료 가져오기 지원';return;}
+  const q=$('rawSearch').value.trim().toLowerCase(),rows=t.rows.filter(r=>!q||Object.values(r).some(v=>String(v).toLowerCase().includes(q)));page=Math.min(page,Math.max(0,Math.ceil(rows.length/50)-1));visible=rows.slice(page*50,page*50+50);
+  const preferred=['_record','Code','TitleCode','Name','Size','Unite','LineData','GN','TU','TC','NU','GU','JU','NC','GC','JC','Bigo'];const cols=preferred.filter(k=>visible.some(r=>r[k]!=null));if(cols.length<=1)cols.push(...t.fields.map(f=>f.name).filter(k=>!cols.includes(k)&&visible.some(r=>r[k]!=null)).slice(0,8));
+  $('rawCoverage').textContent=`${l.tables.length}개 표 · ${l.tables.reduce((s,t)=>s+t.rows.length,0).toLocaleString()}행 보관 · 원본 압축 항목 ${l.archiveFiles?.length||0}개. 도면·서식의 바이너리 자료는 원본에 보존되며 화면 재현은 아직 지원하지 않습니다.`;
+  $('rawContent').innerHTML=t.error?`<p>${esc(t.error)} 원본 파일에는 보존되어 있습니다.</p>`:`<table><thead><tr>${cols.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}<th>상세</th></tr></thead><tbody>${visible.map((r,i)=>`<tr>${cols.map(k=>`<td style="max-width:360px;white-space:pre-wrap">${esc(typeof r[k]==='boolean'?(r[k]?'예':'아니오'):r[k])}</td>`).join('')}<td><button class="button small" data-raw-row="${i}">전체 필드</button></td></tr>`).join('')}</tbody></table>`;
+  $('rawPage').textContent=`${rows.length.toLocaleString()}행 · ${page+1} / ${Math.max(1,Math.ceil(rows.length/50))}`;$('rawPrev').disabled=page===0;$('rawNext').disabled=(page+1)*50>=rows.length;
+ }
+ $('rawLibrary').onchange=tables;$('rawTable').onchange=()=>{page=0;render();};$('rawSearch').oninput=()=>{page=0;render();};$('rawPrev').onclick=()=>{page--;render();};$('rawNext').onclick=()=>{page++;render();};
+ $('rawOriginal').onclick=()=>{const l=lib();if(l?.originalBytes)download(l.originalBytes,l.name,'application/octet-stream');};
+ $('rawExport').onclick=()=>{const t=table();if(t)download(JSON.stringify({source:lib().name,table:t.name,fields:t.fields,rows:t.rows},null,2),t.name+'.json','application/json');};
+ $('rawContent').onclick=e=>{const b=e.target.closest('[data-raw-row]');if(!b)return;const r=visible[Number(b.dataset.rawRow)],t=table();$('detailTitle').textContent=r.Name||r.Code||'원본 행 '+r._record;$('detailSource').textContent=lib().name+' / '+t.name;$('detailContent').innerHTML='<p class="hint">원본의 저장값입니다. 바이너리·메모 필드는 원본 파일에 보존됩니다.</p><table>'+t.fields.map(f=>`<tr><th>${esc(labels[f.name]||f.name)} <small>${esc(f.name)}</small></th><td style="white-space:pre-wrap">${esc(r[f.name]??([1,4,5,6,7,5383,7430].includes(f.type)?'':'바이너리 / 미해석 필드'))}</td></tr>`).join('')+'</table>';$('detailDialog').showModal();};
+ return {refresh,render};
+}
