@@ -4,7 +4,9 @@
 
 ## 다운로드
 
-[최신 Windows 배포 파일](https://github.com/dsa123345a-oss/gongsa-note/releases/latest/download/gongsa-note-windows-x64.zip)을 내려받아 압축을 모두 푼 뒤 `공사노트.exe`를 실행하세요. 10월 메인 DB와 추가 상수도 DB가 기본 포함되어 있습니다. 버전별 변경 내용과 소스는 [릴리스](https://github.com/dsa123345a-oss/gongsa-note/releases)에서 확인할 수 있습니다.
+[최신 Windows 설치파일](https://github.com/dsa123345a-oss/gongsa-note/releases/latest/download/gongsa-note-setup.exe)을 내려받아 설치한 뒤 바탕화면의 공사노트를 실행하세요. 10월 메인 DB와 추가 상수도 DB가 기본 포함되어 있습니다. 버전별 변경 내용과 소스는 [릴리스](https://github.com/dsa123345a-oss/gongsa-note/releases)에서 확인할 수 있습니다.
+
+처음 설치하거나 구버전에서 실행 오류가 발생하면 설치파일을 사용하세요. `gongsa-note-windows-x64.zip`은 프로그램 내부 업데이트용입니다. 탐색기로 직접 압축을 풀어 실행하면 다운로드 출처 표시 때문에 .NET DLL 로드가 차단될 수 있습니다. 기존에 저장한 `.gongsa` 파일은 설치 후 작업 열기에서 열 수 있습니다.
 
 프로그램의 업데이트 메뉴는 이 저장소의 새 정식 배포를 확인합니다. 다운로드한 파일의 크기와 SHA-256을 확인한 뒤 업데이트하며, 기존 공사 자료와 등록한 단가 DB는 보존합니다. GitHub 저장소가 연결되기 전의 구버전은 위 배포 파일을 한 번 직접 받아 실행해야 합니다.
 
@@ -85,8 +87,8 @@ python tools/prepare_release.py release/공사노트 release/public
 
 1. `release.json`의 `repository`가 `dsa123345a-oss/gongsa-note`인지 확인합니다.
 2. 버전을 올리고 검사 후 위 명령으로 새 EXE와 배포 파일을 만듭니다.
-3. 해당 버전의 GitHub 정식 Release(태그 `v0.6.0` 형식)에 `gongsa-note-windows-x64.zip`와 `update.json`을 함께 올립니다.
-4. 저장소가 연결된 첫 버전은 ZIP 전체를 기존 폴더에 풀어 교체합니다. 공사노트 자료 폴더는 유지하세요. 이후 버전부터 앱 안에서 업데이트할 수 있습니다.
+3. 해당 버전의 GitHub 정식 Release(태그 `v0.13.37` 형식)에 설치파일 `gongsa-note-setup.exe`, 업데이트용 `gongsa-note-windows-x64.zip`, `update.json`, 소스 ZIP을 함께 올립니다.
+4. 처음 설치하거나 연결 전 구버전에서는 설치파일을 사용합니다. 이후 버전부터 앱 안에서 업데이트할 수 있습니다.
 
 선언된 기본 DB 외의 개인 공사자료, 사용자 SQLite, 실행 로그는 Git이나 Release에 올리지 않습니다. 공개 배포 EXE에는 코드 서명이 적용되어 있지 않습니다.
 

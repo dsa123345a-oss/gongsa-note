@@ -68,7 +68,7 @@ def main():
     (args.destination / 'update.json').write_text(json.dumps({'version': config['version'], 'asset': ASSET, 'size': asset.stat().st_size, 'sha256': digest}, indent=2) + '\n', encoding='utf-8')
     files = [ROOT / name for name in ('desktop.py','desktop_launch.py','project_files.py','print_pdf.py','updater.py','update_package.py','release.json','gongsa-note.spec','requirements.txt','package.json','.gitignore','README.md','CHANGELOG.md')]
     files.extend(source_defaults.values())
-    for folder, suffixes in [('dist',{'.js','.html','.css','.svg','.png','.ico'}),('tests',{'.py','.mjs'}),('tools',{'.py'})]:
+    for folder, suffixes in [('dist',{'.js','.html','.css','.svg','.png','.ico'}),('tests',{'.py','.mjs'}),('tools',{'.py','.iss','.md'})]:
         files.extend(p for p in (ROOT / folder).iterdir() if p.is_file() and p.suffix in suffixes)
     files.extend(p for p in (ROOT / 'tools' / 'quantity-bridge').iterdir() if p.is_file() and p.suffix in {'.py','.js','.mjs','.json'})
     with zipfile.ZipFile(args.destination / f'gongsa-note-{config["version"]}-source.zip', 'w', zipfile.ZIP_DEFLATED) as output:
