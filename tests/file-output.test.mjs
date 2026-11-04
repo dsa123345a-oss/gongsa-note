@@ -9,9 +9,12 @@ const project={schema:1,title:'검증 공사',lines:[{id:'a',name:'터파기',gr
 test('선택한 엑셀 시트만 출력하고 제외한 시트 참조는 계산값으로 보존한다',async()=>{
  for(const mode of ['design','contractor'])for(const sections of [['summary'],['estimate'],['summary','groups','estimate'],['units','machines','materials','labor']]){
   const zip=await unzip(exportSelectedExcel(project,[],{mode,sections}));const dec=new TextDecoder(),book=dec.decode(await zip.read('xl/workbook.xml'));
-  assert.equal((book.match(/<sheet name=/g)||[]).length,sections.length);
+  // This fixture uses an assembly only: unused machine/material/labor sheets
+  // are omitted just as they are in the print preview.
+  const expected=sections[0]==='units'?1:sections.length;
+  assert.equal((book.match(/<sheet name=/g)||[]).length,expected);
   const names=[...book.matchAll(/<sheet name="([^"]+)"/g)].map(m=>m[1]);
-  for(let i=1;i<=sections.length;i++){
+  for(let i=1;i<=expected;i++){
    const xml=dec.decode(await zip.read(`xl/worksheets/sheet${i}.xml`));
    assert.doesNotMatch(xml,/#REF!|<mergeCells count="0"/);
    for(const m of xml.matchAll(/&apos;([^<]*?)&apos;!/g))assert.ok(names.includes(m[1]),m[1]);

@@ -9,6 +9,7 @@ const identity=r=>JSON.stringify([r.source,r.code,norm(r.name),String(r.spec||''
 const specKey=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s/g,'').replace(/[×＊]/g,'*').replace(/\((\d+종)\)/g,'$1');
 const resourceUnit=u=>unitNorm(String(u||'').replace(/당$/,''));
 const same=(a,b)=>norm(a.name)===norm(b.name)&&specKey(a.spec)===specKey(b.spec)&&resourceUnit(a.unit)===resourceUnit(b.unit);
+export const isAssemblyPriceReference=lib=>lib?.bundledDefault==='assembly'||String(lib?.name||'').normalize('NFKC').replace(/\s/g,'').toLowerCase()==='상수도공사메인(26년)소형감압변수정.ebkx';
 export function resourceLibrary(project,libraries){
  const s=project.resourcePriceLibrary;
  const monthly=libraries.filter(l=>/\d{4}-\d{2}-main\.estx$/i.test(l.name)).sort((a,b)=>b.name.localeCompare(a.name));
@@ -17,6 +18,9 @@ export function resourceLibrary(project,libraries){
 export function createResourcePricer(project,libraries,options={}){
  const master=resourceLibrary(project,libraries),cache=new Map(),indexes=new Map();
  const keepMissing=options.keepMissing??(project.resourceMissingPolicy==='keep'||master?.priceUpdateReference===true);
+ // An unresolved wage must never become a confirmed cost merely because the
+ // selected policy allows missing material/equipment prices to be retained.
+ const canRetain=issue=>!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
  const originalRate=input=>{const r=structuredClone(options.useCurrent||input.components?input:(input.resourcePricing?.original||input));delete r.resourcePricing;return r;};
  function index(lib){if(!indexes.has(lib)){const map=new Map();for(const r of lib?.items||[]){if(r.table==='EstMainDat')continue;const k=r.code;map.set(k,[...(map.get(k)||[]),r]);}indexes.set(lib,map);}return indexes.get(lib);}
  const resources=(master?.items||[]).filter(r=>['노임','자재','장비'].includes(category(r))&&r.table!=='EstMainDat');
@@ -40,7 +44,7 @@ export function createResourcePricer(project,libraries,options={}){
   const r=structuredClone(input),cat=category(r),key=identity(r);
   if(stack.includes(key)||stack.length>16)throw Error('순환 참조 또는 너무 깊은 구성 근거');
   if(['노임','자재'].includes(cat)){
-   const selected=match(r);if(!selected)return {rate:r,changes:[],issues:[{key,resource:structuredClone(r),kind:'missing-reference',reason:'기준 DB에 품명·규격·단위가 일치하는 '+cat+' 없음'}]};
+   const selected=match(r);if(!selected)return {rate:r,changes:[],issues:[{key,resource:structuredClone(r),kind:'missing-reference',reason:'기준 DB에 품명·규격·단위가 일치하는 '+cat+' 항목을 하나로 확인하지 못했습니다.'+(cat==='노임'?' 기준 노임 확인 전 계산 보류':'')}]};
    return {rate:{...r,...Object.fromEntries([...costKeys,'total'].map(k=>[k,selected[k]])),priceReference:structuredClone(selected)},changes:[{name:r.name,spec:r.spec,category:cat,before:r.total,after:selected.total,source:master.name,code:selected.code}],issues:[]};
   }
   if(!r.components&&!['일위대가','단가산출','장비'].includes(cat))return {rate:r,changes:[],issues:[]};
@@ -75,6 +79,10 @@ export function createResourcePricer(project,libraries,options={}){
     const result=walk(child,lib,[...stack,key]);changes.push(...result.changes);issues.push(...result.issues);
     for(const k of costKeys)part[k]=part.sourceComponent&&part.sourceComponent!==k?0:result.rate[k];
     part.total=costKeys.reduce((s,k)=>s+(part[k]||0),0);
+    // Preserve the exact source snapshot even when an unmatched resource keeps
+    // its original price. Reopening a saved project must not need a current DB
+    // to reconstruct the survey pages or fixed-text remark for that price.
+    for(const k of ['prices','quotePages','remark'])if(Object.hasOwn(result.rate,k))part[k]=structuredClone(result.rate[k]);
     if(result.rate.components){part.components=result.rate.components;part.calculation=result.rate.calculation;}
     if(result.rate.priceReference)part.priceReference=result.rate.priceReference;
    }catch(e){issues.push({key:identity(child),resource:child,reason:e.message});}
@@ -92,6 +100,10 @@ export function createResourcePricer(project,libraries,options={}){
    rate.resourcePricing={master:master?.name||'',masterId:master?.id,ready:true,mode:'direct-material',selectedSource:selected.source,changes,issues,original:structuredClone(selected)};
    return {rate,changes,issues,ready:true,mode:'direct-material'};
   }
+  if(isAssemblyPriceReference(master)){
+   const issues=[{kind:'invalid-resource-reference',reason:'추가 상수도 DB는 산출 구성용입니다. 노임은 월별 기준 DB를 선택해야 합니다.'}],warnings=issues.map(i=>({...i,retained:false}));
+   return {rate:{...structuredClone(input),resourcePricing:{ready:false,issues,warnings,changes:[],master:master.name,masterId:master.id,original:structuredClone(input.resourcePricing?.original||input)}},changes:[],issues,warnings,ready:false};
+  }
   if(!master){const issues=[{reason:'노임·자재 기준 DB를 선택하거나 다시 등록하세요.'}];return {rate:{...structuredClone(input),resourcePricing:{ready:false,issues,changes:[],master:project.resourcePriceLibrary?.name||'',original:structuredClone(input.resourcePricing?.original||input)}},changes:[],issues,ready:false};}
   const key=JSON.stringify(input);if(cache.has(key))return structuredClone(cache.get(key));
   let result;
@@ -101,8 +113,8 @@ export function createResourcePricer(project,libraries,options={}){
    result=walk(original,lib);
    result.issues=[...new Map(result.issues.map(i=>[(i.key||'')+i.reason,i])).values()];
    result.changes=[...new Map(result.changes.map(i=>[JSON.stringify(i),i])).values()];
-   result.warnings=result.issues.map(i=>({...i,retained:!!keepMissing&&i.kind==='missing-reference'}));
-   result.ready=result.issues.every(i=>keepMissing&&i.kind==='missing-reference');
+   result.warnings=result.issues.map(i=>({...i,retained:canRetain(i)}));
+   result.ready=result.issues.every(canRetain);
    result.rate.resourcePricing={master:master.name,masterId:master.id,ready:result.ready,changes:result.changes,issues:result.issues,warnings:result.warnings,missingPolicy:keepMissing?'keep':'strict',original:structuredClone(input.resourcePricing?.original||original)};
   }catch(e){result={rate:selected,changes:[],issues:[{kind:'calculation',reason:'산식 검증 불가 · 재계산 미확정: '+e.message}],ready:false,retainedWhole:true};result.warnings=result.issues.map(i=>({...i,retained:false}));result.rate.resourcePricing={master:master.name,masterId:master.id,ready:false,changes:[],issues:result.issues,warnings:result.warnings,missingPolicy:keepMissing?'keep':'strict',original:structuredClone(selected)};}
   cache.set(key,result);return structuredClone(result);

@@ -43,7 +43,7 @@ test('학습이 있어도 재질·뚜껑·시공/자재·소켓 용도 차이를
 });
 test('자동 결과를 다시 학습하지 않고 선택한 미검토 연결만 재적용한다',()=>{
  const p=project(),knowledge=profile(),before=structuredClone(knowledge),rows=planAutoLinks(p,libs([rate()]),'','added',knowledge),linked=applyAutoLinks(p,rows,'old');
- linked.lines[0].qty=9;linked.lines[0].bidPercent=95;linked.lines.push({...structuredClone(linked.lines[0]),id:'keep',autoMatch:{...linked.lines[0].autoMatch,reviewed:true}});
+ linked.lines[0].qty=9;linked.lines[0].bidPercent=95;linked.lines.push({...structuredClone(linked.lines[0]),id:'keep',status:'confirmed',autoMatch:{...linked.lines[0].autoMatch,reviewed:true}});
  const reset=resetPendingAutoLinks(linked);assert.equal(reset.lines[0].name,source.name);assert.equal(reset.lines[0].qty,9);assert.deepEqual(reset.lines[1],linked.lines[1]);
  assert.deepEqual(applyReplannedLinks(linked,[],'empty'),linked);
  const chosen=planAutoLinks(reset,libs([rate({total:220,labor:205})]),'','added',knowledge);const result=applyReplannedLinks(linked,chosen,'new');

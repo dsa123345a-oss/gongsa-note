@@ -16,8 +16,16 @@ test('단위 오표기는 DB 기준으로 고치고 무관한 품명은 자동 �
  assert.equal(planAutoLinks(project([line()]),[lib([rate({name:'모래부설'})])])[0].rate,undefined);
 });
 test('자동 연결은 원본을 보관하고 수량·낙찰률을 유지하며 이름·규격을 복사한다',()=>{
- const p=project([line({name:'PE 이형관 접합',spec:'D 50',bidPercent:90})]);const next=applyAutoLinks(p,planAutoLinks(p,[lib([rate()])]),'batch1');
+ const labor={code:'L1',name:'배관공',spec:'',unit:'인',category:'노임',labor:100,material:0,expense:0,other:0,total:100,source:'2026-10-main.estx'};
+ const assembly=rate({components:[{...labor,qty:1}],calculation:{}});
+ const p=project([line({name:'PE 이형관 접합',spec:'D 50',bidPercent:90})]);const next=applyAutoLinks(p,planAutoLinks(p,[lib([assembly]),{id:'reference',name:'2026-10-main.estx',items:[labor]}]),'batch1');
  const l=next.lines[0];assert.equal(l.name,'PE이형관접합');assert.equal(l.spec,'D50');assert.equal(l.qty,2.5);assert.equal(l.bidPercent,90);assert.equal(amount(l).total,225);assert.equal(pendingAuto(l),true);assert.deepEqual(l.autoMatch.before,p.lines[0]);assert.equal(p.lines[0].rate,null);
+});
+
+test('기준 DB가 없으면 자동 연결 후보를 찾더라도 노임 포함 일위를 확정하지 않는다',()=>{
+ const p=project([line()]),before=structuredClone(p),rows=planAutoLinks(p,[lib([rate()])]),next=applyAutoLinks(p,rows,'missing-reference');
+ assert.equal(next.lines[0].rate.name,'PE이형관접합');assert.equal(next.lines[0].status,'proposed');
+ assert.equal(next.lines[0].rate.resourcePricing.ready,false);assert.equal(amount(next.lines[0]),null);assert.deepEqual(p,before);
 });
 test('기존 연결·제외·공종 제목은 건드리지 않는다',()=>{
  const p=project([line({status:'confirmed',rate:rate()}),line({id:'excluded',exclude:true}),line({id:'heading',level:1})]);assert.deepEqual(planAutoLinks(p,[lib([rate()])]),[]);

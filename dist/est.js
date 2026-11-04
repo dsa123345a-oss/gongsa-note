@@ -100,7 +100,7 @@ export async function importEst(input, filename, inflate) {
       let expense=Number(project?r.JU:r.JC)||0;
       // Preserve the imported total and any unclassified remainder explicitly.
       const other=Number((total-labor-material-expense).toFixed(8));
-      const item={id:`${id}:${table}:${r._record}`,library:id,category,table,record:r._record,code:r.Code,name:r.Name.trim(),spec:(r.Size||'').trim(),unit:(r.Unite||'').trim(),total,labor,material,expense,other,group,source:filename,prices:Array.from({length:6},(_,i)=>r['Cost'+(i+1)]??null),sourceQuantity:project?r.GN:null,sourceAmount:project?r.TC:null,government:r.Gangub===2};
+      const item={id:`${id}:${table}:${r._record}`,library:id,category,table,record:r._record,code:r.Code,name:r.Name.trim(),spec:(r.Size||'').trim(),unit:(r.Unite||'').trim(),total,labor,material,expense,other,group,source:filename,prices:Array.from({length:6},(_,i)=>r['Cost'+(i+1)]??null),quotePages:Array.from({length:6},(_,i)=>r['Page'+(i+1)]??''),remark:r.Remark??'',sourceQuantity:project?r.GN:null,sourceAmount:project?r.TC:null,government:r.Gangub===2};
       items.push(item);if(project)projectRows.push(item);
     }
   }

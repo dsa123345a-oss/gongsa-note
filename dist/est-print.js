@@ -11,6 +11,8 @@ import {hierarchyTotals} from './estimate-core.js';
 import {collectPrintEvidence} from './print-evidence.js';
 import {evidenceCategory} from './evidence-workspace.js';
 import {machineBasisRows} from './machine-basis-print.js';
+import {machineInputPrintRows} from './machine-input-print.js';
+import {priceBasisLabel} from './price-basis-label.js';
 import {estFormulaDisplay} from './est-formula-display.js';
 export const printDocuments={summary:'원가계산서',groups:'내역서총괄표',estimate:'내역서',unitSummary:'일위대가총괄표',units:'일위대가',formulaSummary:'단가산출총괄표',formulas:'단가산출',machineBasis:'기계경비적용기준',machineSummary:'기계경비총괄표',machines:'기계경비산출근거',materials:'자재단가',labor:'노임단가'};
 export const defaultPrintDocuments=['summary','groups','estimate','units','formulas','machines','materials','labor'];
@@ -26,7 +28,15 @@ const detailWidths=[4.4,14.35,14.15,4.4,2.4,6.5,7.5,6.5,7.5,6.5,7.5,6.5,7.5,4.3]
 const detailHead=[[cell('공종','center'),cell('품 명','center'),cell('규 격','center'),cell('수량','center'),cell('단위','center'),...['합 계','노무비','재료비','경 비'].map(x=>cell(x,'center',2)),cell('비 고','center')],['','','','','',...Array.from({length:4},()=>['단 가','금 액']).flat(),''].map(x=>cell(x,'center'))];
 const summaryHead=['공종','품 명','규 격','수량','단위','합 계','노무비','재료비','경 비','비 고'];
 const summaryWidths=[5,17,17,6,5,12,10,10,10,8];
-const byCode=(lib,table,code)=>lib?.tables?.find(t=>t.name.toLowerCase()===table.toLowerCase()+'.dat')?.rows.find(r=>r.Code===code);
+// Legacy snapshots may omit quote notes. Only supplement from the identical
+// loaded library and matching applied item, never from a newly named DB.
+const materialSource=(rate,libraries)=>{
+ if(!rate.library||rate.manual)return null;
+ const lib=libraries.find(l=>l.id===rate.library&&l.name===rate.source);
+ const raw=lib?.tables?.find(t=>t.name.toLowerCase()==='stuffcdat.dat')?.rows.find(r=>r.Code===rate.code);
+ const sameText=(a,b)=>String(a||'').trim()===String(b||'').trim();
+ return raw&&Number.isFinite(raw.TC)&&raw.TC===rate.total&&sameText(raw.Name,rate.name)&&sameText(raw.Size,rate.spec)&&sameText(raw.Unite,rate.unit)?raw:null;
+};
 export function makePrintDocuments(project,libraries=[]){
  project=synchronizeLinkedCosts(project);
  const result={},t=totals(project.lines,project.charges),hier=hierarchyTotals(project.lines),graph=collectPrintEvidence(project,libraries),lines=project.lines.filter(l=>!l.exclude);
@@ -69,8 +79,9 @@ export function makePrintDocuments(project,libraries=[]){
  const rawCells=r=>[r.NC,r.GC,(r.JC||0)+(r.SC||0),r.TC];
  const componentRows=n=>n.verified&&n.calc?n.calc.rows.map(p=>({name:p.unit==='인'?String(p.name||p.kind).replace(/\s/g,''):p.name||p.kind,spec:p.spec||'',qty:p.kind?p.percent??p.qty:p.qty,unit:p.unit||(p.kind==='percent'?'%':''),units:costs(p),amounts:costs(p.amount),formula:p.qtyExpression??p.qty,kind:p.kind,basis:p.basis,raw:p})):n.raw.filter(r=>!r.TitleCode&&(r.Name||r.LineData||r.Code)).map(r=>({name:text(r.Name||r.LineData||r.Code),spec:r.Size||'',qty:r.GN,unit:r.Unite||'',units:[r.TU,r.NU,r.GU,r.JU],amounts:[r.TC,r.NC,r.GC,(r.JC||0)+(r.SC||0)],formula:text(r.LineData||''),raw:r}));
  const unitRows=[];
- nodes('일위대가').forEach((n,i)=>{unitRows.push(row(['제'+(i+1)+'호표',n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).flatMap(v=>['',money(v)]),''],{bold:true,itemStart:true}));const parts=componentRows(n);for(const p of parts)unitRows.push(row(['',p.name,p.spec,cell(num(p.qty),'right'),cell(p.unit,'center'),...p.units.flatMap((v,i)=>[money(v),money(p.amounts[i])]),'']));if(!parts.length)unitRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',14)]));unitRows.push(row(Array(14).fill('')));});
- add('units',unitRows,detailWidths,detailHead);
+ nodes('일위대가').forEach((n,i)=>{unitRows.push(row(['제'+(i+1)+'호표',n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).flatMap(v=>['',money(v)]),''],{bold:true,itemStart:true}));const parts=componentRows(n);for(const p of parts)unitRows.push(row(['',p.name,p.spec,cell(num(p.qty),'right'),cell(p.unit,'center'),...p.units.flatMap((v,i)=>[money(v),money(p.amounts[i])]),'']));if(!parts.length)unitRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',14)]));if(n.issues?.length)unitRows.push(row([{...cell([...new Set(n.issues)].join(' / '),'left',14),readable:true,fontSize:9}],{note:true}));unitRows.push(row(Array(14).fill('')));});
+ const unitHead=detailHead.map(r=>r.map(c=>({...c})));unitHead[0][0]=cell('호 표','center');
+ add('units',unitRows,detailWidths,unitHead);
  const formulaRows=[];
  nodes('단가산출').forEach((n,i)=>{
   formulaRows.push(row([`${i+1}. ${n.rate.name} (${n.rate.spec||''}) [${n.rate.unit||''}]`,...costs(n.rate).map(money)],{bold:true,itemStart:true}));
@@ -83,15 +94,18 @@ export function makePrintDocuments(project,libraries=[]){
  const machineRows=[];
  nodes('장비').forEach((n,i)=>{machineRows.push(row([`${i+1}. ${n.rate.name}`,n.rate.spec||'','',...costs(n.rate).map(money),''],{bold:true,itemStart:true}));
   for(const p of componentRows(n).map(p=>{if(!n.printComponents)return p;const take=(raw)=>{const kept=Object.fromEntries(['labor','material','expense','other'].map(k=>[k,n.printComponents.includes(k)?Number(raw?.[k]||0):0]));kept.total=Object.values(kept).reduce((x,y)=>x+y,0);return costs(kept);};return {...p,units:take(p.raw),amounts:take(p.raw.amount)};}).filter(p=>!n.printComponents||p.amounts.some(Boolean))){let formula=p.formula?String(p.formula):String(p.qty??'');if(n.verified&&n.calc){formula=formula.replace(/\b[A-Za-z_][A-Za-z_0-9]*\b/g,k=>{const v=n.calc.variables.find(v=>v.name===k);return v?'('+v.expression+')':k;});formula=p.kind==='percent'?`${num(p.raw.basisValue)} × ${num(p.qty)}%`:p.raw.machineOwnership?`${num(p.raw.expense)} × (${formula})`:`${num(p.units[0])} × (${formula})`;}else if(p.raw?.TU!=null)formula=`${num(p.raw.TU)} × ${num(p.raw.GN)}`;machineRows.push(row([p.name,p.spec,formula,...p.amounts.map(money),'']));}
-  if(n.machine){for(const [k,v] of Object.entries(n.rate.machineInputs||{}))machineRows.push(row([k,'',String(v),'','','','','']));}
-  if(!n.raw.length&&!n.parts?.length&&!n.machine)machineRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',8)]));machineRows.push(row(Array(8).fill('')));
+  if(n.machine){
+   if(n.verified){for(const p of machineInputPrintRows(n))machineRows.push(row([p.name,'',p.formula,...costs(p.amount).map(money),'']));machineRows.push(row([cell('각 항목 원 미만 절사','left',8)],{note:true}));}
+   else machineRows.push(row([cell('입력 산식과 현재 단가가 다릅니다. 산출근거를 확인하세요.','left',8)],{note:true}));
+  }
+  if(!n.raw.length&&!n.parts?.length&&!n.machine)machineRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',8)]));if(n.issues?.length)machineRows.push(row([{...cell([...new Set(n.issues)].join(' / '),'left',8),readable:true,fontSize:9}],{note:true}));machineRows.push(row(Array(8).fill('')));
  });
  add('machines',machineRows,[20,16,29,7,7,7,7,7],[['명 칭','규 격','산 출 근 거','합 계','노무비','재료비','경 비','비 고']]);
  const basisRows=machineBasisRows(nodes('장비')).map(values=>row(values.map(v=>({...cell(v),readable:true,fontSize:9}))));
  add('machineBasis',basisRows,[12,24,26,13,25],[['구 분','적 용 대 상','산 식','적 용 값','근 거']]);
  const materialHeads=[[...['No','품 명','규 격','단위'].map(x=>cell(x,'center')),...['가격정보','물가자료','유통물가','물가정보','거래가격','견적가1'].map(x=>cell(x,'center',2)),cell('적용단가','center'),cell('비 고','center')],['','','','',...Array.from({length:6},()=>['단 가','page']).flat(),'',''].map(x=>cell(x,'center'))];
- add('materials',nodes('자재').map((n,i)=>{const r=n.rate,lib=(libraries.find(l=>l.id===r.library)||libraries.find(l=>l.name===r.source)),raw=byCode(lib,'StuffcDat',r.code);return row([i+1,r.name,r.spec||'',cell(r.unit,'center'),...Array.from({length:6},(_,j)=>[money(r.prices?.[j]??raw?.['Cost'+(j+1)]),r.quotePages?.[j]||raw?.['Page'+(j+1)]||'']).flat(),money(r.total),[raw?.Remark,n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join(' · ')]);}),[3,14,12,3,...Array(12).fill(4.6),6,6.8],materialHeads);
- add('labor',nodes('노임').map((n,i)=>row([i+1,n.rate.name,n.rate.spec||'',cell(n.rate.unit,'center'),money(n.rate.total),{...cell([n.rate.source,n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join('\n')),readable:true,fontSize:9}])),[5,27,20,8,15,25],[['No','직 종','규 격','단위','적용단가','적용 기준']]);
+ add('materials',nodes('자재').map((n,i)=>{const r=n.rate,raw=materialSource(r,libraries);return row([i+1,r.name,r.spec||'',cell(r.unit,'center'),...Array.from({length:6},(_,j)=>[money(r.prices?.[j]??raw?.['Cost'+(j+1)]),r.quotePages?.[j]??raw?.['Page'+(j+1)]??'']).flat(),money(r.total),[r.remark??raw?.Remark,n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join(' · ')]);}),[3,14,12,3,...Array(12).fill(4.6),6,6.8],materialHeads);
+ add('labor',nodes('노임').map((n,i)=>row([i+1,n.rate.name,n.rate.spec||'',cell(n.rate.unit,'center'),money(n.rate.total),{...cell([priceBasisLabel(n.rate,'노임'),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join('\n')),readable:true,fontSize:9}])),[5,27,20,8,15,25],[['No','직 종','규 격','단위','적용단가','적용 기준']]);
  const bundle={documents:Object.keys(printDocuments).map(k=>result[k]),warnings:[...(t.missing?[`단가·수량 미확정 ${t.missing}건 · 검토용 출력`]:[]),...graph.warnings],totals:t};bundle.native=nativeEstimateSheets(project,bundle);return bundle;
 }
 export function estPrintSettings(value={}){

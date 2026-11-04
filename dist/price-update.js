@@ -1,4 +1,4 @@
-import {createResourcePricer,resourceIdentity} from './resource-pricing.js';
+import {createResourcePricer,resourceIdentity,isAssemblyPriceReference} from './resource-pricing.js';
 import {attachMachineBasis} from './est-edit.js';
 import {validateProject,collectEvidence} from './project-data.js';
 import {totals} from './calc.js';
@@ -6,6 +6,7 @@ import {totals} from './calc.js';
 const keys=['labor','material','expense','other','total'];
 export function validatePriceReference(reference){
  if(!reference?.items?.length)throw Error('최신 단가 DB를 선택하세요.');
+ if(isAssemblyPriceReference(reference))throw Error('산출 구성용 추가 DB는 노임 기준으로 사용할 수 없습니다. 최신 월별 DB를 선택하세요.');
  const priceTables=new Set(['stuffcdat.dat','laborcdat.dat','machtitledat.dat','machmaindat.dat','machgijundat.dat']);
  if(reference.tables?.some(t=>t.error&&priceTables.has(t.name.toLowerCase())))throw Error('단가 표를 읽지 못했습니다. 최신 DB 파일을 확인하세요.');
  if(!reference.items.some(i=>['자재','노임','장비'].includes(i.category)))throw Error('노임·자재·장비 기준 단가가 없는 DB입니다.');

@@ -23,7 +23,9 @@ test('같은 코드의 다른 DB와 다른 규격을 사용하지 않는다',()=
  const row=attachQuantityContracts(readQuantityContracts(sheets())[0],[line()])[0];
  const libs=[{id:'main',name:'10월 메인',items:[rate({source:'10월 메인',id:'wrong'})]},{id:'extra',name:'추가 DB',items:[rate(),rate({id:'size',spec:'D50'})]}];
  const p={lines:[row],charges:[],mappings:{}};
- const plans=planAutoLinks(p,libs,'','main');assert.equal(plans[0].rate.id,'r');assert.equal(plans[0].recommended,true);assert.equal(applyAutoLinks(p,plans,'test').lines[0].qty,5);
+ const plans=planAutoLinks(p,libs,'','main');assert.equal(plans[0].rate.id,'r');assert.deepEqual(plans[0].rate.resourcePricing.original,rate());
+ assert.equal(plans[0].rate.resourcePricing.ready,false);assert.equal(plans[0].recommended,false);
+ const linked=applyAutoLinks(p,plans,'test').lines[0];assert.equal(linked.qty,5);assert.equal(linked.unit,target.unit);assert.equal(linked.name,target.name);assert.equal(linked.spec,target.spec);assert.equal(linked.status,'proposed');
  assert.equal(planAutoLinks(p,libs.slice(0,1))[0].rate,undefined);
 });
 test('미선택·손상·중복 연결정보는 유사 검색으로 자동 확정하지 않는다',()=>{

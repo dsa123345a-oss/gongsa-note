@@ -30,3 +30,13 @@ test('현재 인쇄항목만 출력하고 수식의 HTML은 실행되지 않는�
 });
 
 test('노무비만 있는 일위·단산은 노임 단가표로 잘못 분류하지 않는다',()=>{const p=project();p.lines=[line('u',{rate:rate({code:'U1',category:'내역단가',labor:100,material:0,expense:0,total:100})}),line('d',{rate:rate({code:'D1',category:'내역단가',labor:100,material:0,expense:0,total:100})})];const b=makePrintDocuments(p);assert.equal(b.documents.find(d=>d.key==='labor').rows.length,0);assert.equal(b.documents.find(d=>d.key==='units').rows.filter(r=>r.itemStart).length,1);assert.equal(b.documents.find(d=>d.key==='formulas').rows.filter(r=>r.itemStart).length,1);});
+
+test('일위와 장비의 구성합계 불일치는 출력 문서에도 표시한다',()=>{
+ for(const [category,code,key] of [['일위대가','U1','units'],['장비','E1','machines']]){
+  const p=project();p.lines=[line('bad',{rate:rate({category,code,labor:200,material:0,expense:0,total:200,components:[{name:'보통인부',unit:'인',qty:1,labor:100,material:0,expense:0,other:0}]})})];
+  const before=structuredClone(p),b=makePrintDocuments(p),doc=b.documents.find(d=>d.key===key);
+  assert.ok(b.warnings.some(w=>w.includes('구성 합계와 현재 적용 단가가 다름')));
+  assert.ok(doc.rows.some(r=>r.note&&r.cells[0].value.includes('구성 합계와 현재 적용 단가가 다름')));
+  assert.deepEqual(p,before);
+ }
+});

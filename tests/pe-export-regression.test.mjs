@@ -13,7 +13,8 @@ test('PE 부설·소켓플랜지·범위형 이경소켓·압륜의 추가 DB �
  for(const [name,spec,unit,to,toSpec,toUnit,category] of cases){const src=line(name,spec,unit),target=rate(to,toSpec,toUnit,category);
   const profile={rules:[{kind:'emergency',source:src,target,support:1,total:1,projectCount:1}]};
   const result=planAutoLinks({title:'긴급보수',lines:[src]},[{id:'added',items:[target]}],'','added',profile)[0];
-  assert.equal(result.rate,target,name);assert.equal(result.recommended,true,name);assert.equal(src.unit,unit);
+  assert.deepEqual(result.rate.resourcePricing.original,target,name);assert.equal(result.rate.resourcePricing.ready,category==='자재',name);
+  assert.equal(result.rate.name,to);assert.equal(result.rate.spec,toSpec);assert.equal(result.rate.unit,toUnit);assert.equal(result.recommended,true,name);assert.equal(src.unit,unit);
  }
  assert.equal(compatibleUnits(line('PE소켓','D20'),rate('PE소켓','D20','조')),false);
  assert.equal(compatibleWork(line('PE소켓플랜지','D50'),rate('STS소켓플랜지','D50')),false);

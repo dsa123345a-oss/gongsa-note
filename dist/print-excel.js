@@ -1,16 +1,21 @@
 import {layoutNativeSheet,prepareNativeSheets} from './native-print-layout.js';
 import {appendWorkbookStyles} from './est-excel-native.js';
-import {makePrintDocuments,buildPrintPages,layoutPrintDocument,estPrintSettings,printDocuments} from './est-print.js';
+import {makePrintDocuments,buildPrintPages,estPrintSettings,printDocuments} from './est-print.js';
 import {writeTemplateWorkbook,columnName,sheetXml} from './template-workbook.js';
 
 // Evidence sheets use the preview layout. The three estimate sheets below use
 // the native EST workbook geometry, with the same calculated contents.
 export function vectorPrintExcelSheets(project,libraries=[],options={}){
  const settings=estPrintSettings({...project.estPrintSettings,...options.printSettings,sections:options.sections||['summary','groups','estimate']});
- const keys=Object.keys(printDocuments).filter(k=>settings.sections.includes(k));
- if(!keys.length)throw Error('내보낼 시트를 하나 이상 선택하세요.');
+ const selected=Object.keys(printDocuments).filter(k=>settings.sections.includes(k));
+ if(!selected.length)throw Error('내보낼 시트를 하나 이상 선택하세요.');
+ const bundle=makePrintDocuments(project,libraries);
+ // Match preview/PDF: a checked evidence category with no used items must not
+ // create a blank sheet/page or shift the page numbers of later documents.
+ const keys=selected.filter(k=>bundle.documents.some(d=>d.key===k&&d.rows.length));
+ if(!keys.length)throw Error('출력할 항목이 없습니다.');
  settings.sections=keys;
- const bundle=makePrintDocuments(project,libraries),pages=bundle.documents.some(d=>keys.includes(d.key)&&d.rows.length)?buildPrintPages(bundle,settings,options.measure):[];
+ const pages=buildPrintPages(bundle,settings,options.measure);
  const fonts=[{name:'Calibri',size:11}],borders=[{}],numberFormats=[],styles=[{}];
  const add=(list,value)=>{const key=JSON.stringify(value),found=list.findIndex(v=>JSON.stringify(v)===key);if(found>=0)return found;list.push(value);return list.length-1;};
  const style=(s={})=>add(styles,{font:add(fonts,{name:'굴림체',size:s.size||10.5,bold:!!s.bold}),border:add(borders,s.border||{}),format:s.formatCode?164+add(numberFormats,s.formatCode):0,align:s.align||'left',wrap:!!s.wrap,shrink:!!s.shrink,vertical:s.vertical||'center',rotation:s.rotation||0});
@@ -18,8 +23,6 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
  for(const key of keys){
   if(['summary','groups','estimate'].includes(key))continue;
   const doc=bundle.documents.find(d=>d.key===key),printed=pages.filter(p=>p.document===key);
-  // Keep explicitly checked empty tables, with their normal headings.
-  if(!printed.length)printed.push(...layoutPrintDocument(doc,settings,options.measure));
   const first=printed[0],g=first.grid,n=g.cols.length,rows=[],merges=[],rowBreaks=[],shapes=[];
   let pageCursor=0;
   // Excel quantizes row heights to screen pixels. Round cumulative positions,
@@ -56,7 +59,10 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
      const rowspan=source.header&&grid.headerCount===2&&source.headerIndex===0&&span===1?2:1;
      merge(out,start,out+rowspan-1,start+span-1);
      if(rowspan===2)occupied.add(`${ri+1}:${start}`);
-     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(multiline?Math.min(grid.size,(source.height-3)/(String(value).split('\n').length*1.25)):(source.header?grid.size+1:grid.size)),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!cell.fit&&!numeric&&!percent,shrink:!cell.keepFont&&!cell.readable&&(!multiline||!!cell.fit||numeric||percent),numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
+     // The preview already fits/wraps the cell and determines its row height.
+     // Recalculating a multiline font here made the same header/body smaller
+     // only in Excel (e.g. the two-line 노무비 header was 10.14 instead of 11.5).
+     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(source.header?grid.size+1:grid.size),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!cell.fit&&!numeric&&!percent,shrink:!cell.keepFont&&!cell.readable&&(!multiline||!!cell.fit||numeric||percent),numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
      if(rowspan===2){
       // The next header row supplies the bottom edge of a vertically merged cell.
       // Its blank value is retained and no overlapping merge is generated.
@@ -91,7 +97,7 @@ export function printExcelSheets(project,libraries=[],options={}){
  const vector=vectorPrintExcelSheets(project,libraries,options),native=prepareNativeSheets(vector.bundle.native,estPrintSettings({...project.estPrintSettings,...options.printSettings,sections:options.sections||['summary','groups','estimate']}));
  const combined=appendWorkbookStyles(native.styles,vector.styles),names=new Set(['원가계산서','내역서총괄표','내역서']);
  const settings=estPrintSettings({...project.estPrintSettings,...options.printSettings,sections:options.sections||['summary','groups','estimate']});
- const keys=Object.keys(printDocuments).filter(k=>settings.sections.includes(k));
+ const keys=Object.keys(printDocuments).filter(k=>settings.sections.includes(k)&&vector.bundle.documents.some(d=>d.key===k&&d.rows.length));
  const sheets=keys.map((key,index)=>{
   const doc=vector.bundle.documents.find(d=>d.key===key),pages=vector.pages.filter(p=>p.document===key);
   if(names.has(doc.title)){const n=native.sheets.find(n=>n.name===doc.title),layout=layoutNativeSheet(n,native.styles,doc,settings);return {...layout.sheet,print:{...layout.sheet.print,flags:(layout.sheet.print.flags&~128)|(index===0?128:0),firstPageNumber:settings.startPage},pages:pages.length?pages:layout.pages};}

@@ -10,7 +10,8 @@ test('명확한 품명·관경 일치는 연결 사례가 한 개여도 자동 �
   const line=row(name,'S20SU'),rate=item(target,spec);
   const learning={rules:[{kind:'emergency',source:line,target:rate,support:1,total:1,projectCount:1}]};
   const result=planAutoLinks({title:'긴급보수',lines:[line]},[{id:'added',items:[rate]}],'','added',learning)[0];
-  assert.equal(result.rate,rate);assert.equal(result.recommended,true);assert.equal(result.exact,true);assert.equal(line.spec,'S20SU');
+  assert.deepEqual(result.rate.resourcePricing.original,rate);assert.equal(result.rate.resourcePricing.mode,'direct-material');assert.equal(result.rate.resourcePricing.ready,true);assert.equal(result.rate.total,rate.total);
+  assert.equal(result.recommended,true);assert.equal(result.exact,true);assert.equal(line.spec,'S20SU');
  }
 });
 test('모래부설은 관로 모래 부설을 찾으며 다른 시공 방식은 제외한다',()=>{

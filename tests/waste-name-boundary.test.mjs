@@ -24,7 +24,7 @@ test('one-character Korean substrings do not identify longer work names while id
  }
  assert.equal(textSimilarity('물','물'),1);
  const planned=planAutoLinks({lines:[line('물','','m')]},[library([water])],'','added',{rules:[]})[0];
- assert.equal(planned.rate,water);assert.equal(planned.recommended,true);
+ assert.deepEqual(planned.rate.resourcePricing.original,water);assert.equal(planned.rate.resourcePricing.mode,'direct-material');assert.equal(planned.rate.resourcePricing.ready,true);assert.equal(planned.rate.total,water.total);assert.equal(planned.recommended,true);
 });
 
 test('waste material and route safety is independent of DB category and quantity-sheet unit',()=>{
@@ -33,8 +33,8 @@ test('waste material and route safety is independent of DB category and quantity
   const l=line('폐기물처리',material+'(후포면 ↔ 울진)','개'),p={lines:[l]};
   assert.equal(compatibleWork(l,wrongMaterial),false);assert.equal(compatibleWork(l,wrongRoute),false);
   const planned=planAutoLinks(p,[library([water,wrongMaterial,wrongRoute,good])],'','added',{rules:[]})[0];
-  assert.equal(planned.rate,good);assert.equal(planned.recommended,true);
-  const linked=applyAutoLinks(p,[planned],'b').lines[0];assert.equal(linked.unit,'TON당');assert.equal(linked.qty,2.303);
+  assert.deepEqual(planned.rate.resourcePricing.original,good);assert.equal(planned.rate.resourcePricing.ready,category==='자재');assert.equal(planned.recommended,true);
+  const linked=applyAutoLinks(p,[planned],'b').lines[0];assert.equal(linked.unit,'TON당');assert.equal(linked.qty,2.303);assert.equal(linked.name,good.name);assert.equal(linked.spec,good.spec);assert.equal(linked.status,category==='자재'?'confirmed':'proposed');
  }
 });
 

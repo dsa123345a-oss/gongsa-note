@@ -24,15 +24,18 @@ test('소운반 인력·덤프·굴삭·경운기 및 지게·리어카를 서�
  assert.equal(compatibleWork(line('모래소운반(인력)'),rate('모래소운반','덤프2.5톤')),false);
  assert.equal(compatibleWork(line('모래소운반','인력,지게'),rate('모래소운반','인력,리어카')),false);
  const l=line('아스콘소운반','인력'),main=rate('아스콘소운반','인력,리어카','Ton');
- assert.equal(planAutoLinks({lines:[l]},[{id:'added',items:[rate(l.name,'덤프2.5톤','Ton')]},{id:'main',items:[main]}],'','added')[0].rate,main);
+ const selected=planAutoLinks({lines:[l]},[{id:'added',items:[rate(l.name,'덤프2.5톤','Ton')]},{id:'main',items:[main]}],'','added')[0].rate;
+ assert.deepEqual(selected.resourcePricing.original,main);assert.equal(selected.resourcePricing.ready,false);
+ assert.equal(selected.name,main.name);assert.equal(selected.spec,main.spec);
 });
 test('수량산출서 단위와 무관하게 같은 DB 후보를 선택하고 DB 단위·원본 수량을 적용한다',()=>{
  for(const [name,spec,dbUnit] of [['아스콘소운반','덤프2.5톤','Ton'],['PE소켓','D20','조'],['모래소운반','덤프2.5톤','㎥']]){
   const r=rate(name,spec,dbUnit),lib={id:'a',items:[r]},base=line(name,spec,dbUnit),profile={rules:[{kind:'any',source:base,target:r,support:5,total:5,projectCount:5}]};
   for(const unit of ['','㎥','Ton','개','m']){
    const l={...base,unit},p={lines:[l]},plan=planAutoLinks(p,[lib],'','a',profile)[0];
-   assert.equal(plan.rate,r);assert.equal(plan.recommended,true);assert.equal(plan.learning.strong,true);
+   assert.deepEqual(plan.rate.resourcePricing.original,r);assert.equal(plan.rate.resourcePricing.ready,false);assert.equal(plan.recommended,true);assert.equal(plan.learning.strong,true);
    const linked=applyAutoLinks(p,[plan],'batch');assert.equal(linked.lines[0].unit,dbUnit);assert.equal(linked.lines[0].qty,2.5);assert.equal(linked.lines[0].factor,1);assert.equal(linked.lines[0].autoMatch.before.unit,unit);
+   assert.equal(linked.lines[0].status,'proposed');assert.equal(linked.lines[0].name,r.name);assert.equal(linked.lines[0].spec,r.spec);
    assert.equal(incompatibleAutoLinks(linked).length,0);
   }
  }

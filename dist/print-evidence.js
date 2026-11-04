@@ -3,6 +3,17 @@ import {unitNorm} from './calc.js';
 const keys=['labor','material','expense','other'];
 const textKey=s=>String(s??'').normalize('NFKC').toLowerCase().replace(/[\s\u200b-\u200d\ufeff]/g,'');
 const category=n=>n.kind==='일위대가'&&/^D/.test(n.rate.code||'')?'단가산출':n.kind;
+const machineName=s=>textKey(s).replace(/^굴착기(?=\(|$)/,'굴삭기');
+// These are source-location fields, not calculation inputs. Everything else,
+// including every component, expression, coefficient, variable and result,
+// must agree before verified machines can share an output entry.
+const machineTracking=new Set(['id','library','source','code','record','originalRecord']);
+function machineValue(value,key=''){
+ if(Array.isArray(value))return value.map(v=>machineValue(v));
+ if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>!machineTracking.has(k)).map(k=>[k,machineValue(value[k],k)]));
+ return key==='name'?machineName(value):value;
+}
+const machineReference=r=>Object.fromEntries(['source','library','code','id','record','name','spec','unit'].filter(k=>r[k]!=null).map(k=>[k,r[k]]));
 // Output-only canonicalization. Never change the rates used by the estimate.
 export function collectPrintEvidence(project,libraries=[]){
  const graph=collectPriceEvidence(project,libraries),queue=[...graph.nodes],visited=new Map();
@@ -30,17 +41,19 @@ export function collectPrintEvidence(project,libraries=[]){
   // Fuel often appears as "주연료 / 경유" in a recipe. The applied reference
   // identifies the same resource as "경유" in the material table. Only use it
   // when the units and all applied prices agree; never replace a manual price.
-  if(resource&&ref&&unitNorm(r.unit)===unitNorm(ref.unit)&&keys.every(k=>Number(r[k]||0)===Number(ref[k]||0)))r={...r,...Object.fromEntries(['name','spec','unit','code','source','library','prices','quotePages'].map(k=>[k,ref[k]]))};
+  if(resource&&ref&&unitNorm(r.unit)===unitNorm(ref.unit)&&keys.every(k=>Number(r[k]||0)===Number(ref[k]||0)))r={...r,...Object.fromEntries(['name','spec','unit','code','source','library','prices','quotePages','remark'].map(k=>[k,ref[k]]))};
   if(kind==='노임')r={...r,name:String(r.name||'').replace(/[\s\u200b-\u200d\ufeff]/g,'')};
-  const identity=[kind,textKey(r.name),textKey(r.spec),unitNorm(r.unit)];
+  const identity=[kind,machine?machineName(r.name):textKey(r.name),textKey(r.spec),unitNorm(r.unit)];
   if(resource)identity.push(...keys.map(k=>r[k]||0));
-  else if(machine)identity.push(r.source,r.code,node.calc.result,node.parts,node.calculation);
+  else if(machine)identity.push(machineValue(node.parts),machineValue(node.calculation),machineValue(node.calc));
   else identity.push(r.source,r.code,...keys.map(k=>r[k]||0),r.components,r.calculation,r.sourceComponent);
   const key=JSON.stringify(identity);let existing=distinct.get(key);
   if(!existing){
-   existing={...node,rate:{...r},uses:new Set(node.uses),issues:[...node.issues],printComponents:machine?[]:null};distinct.set(key,existing);
-  }else for(const usage of node.uses)existing.uses.add(usage);
+   existing={...node,rate:{...r},uses:new Set(node.uses),issues:[...node.issues],printComponents:machine?[]:null,...(machine?{printSources:[],printReferences:[]}:{} )};distinct.set(key,existing);
+  }else {for(const usage of node.uses)existing.uses.add(usage);existing.issues=[...new Set([...existing.issues,...node.issues])];}
   if(machine){
+   if(r.source&&!existing.printSources.includes(r.source))existing.printSources.push(r.source);
+   const reference=machineReference(r);if(!existing.printReferences.some(x=>JSON.stringify(x)===JSON.stringify(reference)))existing.printReferences.push(reference);
    const used=r.sourceComponent?[r.sourceComponent]:keys;
    existing.printComponents=[...new Set([...existing.printComponents,...used])];
    for(const k of keys)existing.rate[k]=existing.printComponents.includes(k)?node.calc.result[k]:0;
