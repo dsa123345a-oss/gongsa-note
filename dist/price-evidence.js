@@ -49,7 +49,7 @@ export function collectPriceEvidence(project,libraries=[]){
    const next=walk(child,node.id+' '+rate.name,lib,[...stack,key]);if(next)node.children.set(i,next);
   }
   if(sheet<2&&!node.verified&&!rate.manual&&!rate.machineInputs)node.issues.push(raw.length?'원본 저장 근거 표시 · 적용 단가 직접 입력':'구성 근거 없음 · 적용 단가 직접 입력');
-  for(const issue of rate.resourcePricing?.warnings||[])node.issues.push((issue.resource?.name||'')+' '+issue.reason+(issue.retained===false?' · 미확정 · 기준가격 확인 필요':' · 기존 단가 유지'));
+  for(const issue of rate.resourcePricing?.warnings||[])node.issues.push((issue.resource?.name||'')+' '+issue.reason+(issue.kind==='fallback-reference'?' · 추가 DB 노임 적용':issue.retained===false?' · 미확정 · 기준가격 확인 필요':' · 기존 단가 유지'));
   if(node.issues.length)warnings.push(node.id+' '+rate.name+' · '+node.issues.join(' / '));
   nodes.push(node);return node;
  }

@@ -9,7 +9,7 @@ test('실제 적용 DB의 기준월로 표시하고 기준월을 모르면 10월
  assert.equal(priceBasisLabel({source:'2026-10-main.estx'}),'2026년 10월 기준 노임');
  assert.equal(priceBasisLabel({source:'2027-01-main.estx'}),'2027년 1월 기준 노임');
  assert.equal(priceBasisLabel({source:'2026년 9월 노임'}),'2026년 9월 기준 노임');
- assert.equal(priceBasisLabel({source:'상수도공사메인(26년)소형감압변 수정.ebkx'}),'기준 노임 확인 필요');
+ assert.equal(priceBasisLabel({source:'상수도공사메인(26년)소형감압변 수정.ebkx'}),'추가 DB 기준 노임');
  assert.equal(priceBasisLabel({source:'2026-13-main.estx'}),'노임 기준월 미확인');
  assert.equal(priceBasisLabel({source:'기존공사.estx'}),'노임 기준월 미확인');
  assert.equal(priceBasisLabel({source:'나의 단가',table:'UserQuote'}),'직접 입력 노임');

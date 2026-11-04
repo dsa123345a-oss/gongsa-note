@@ -18,20 +18,22 @@ export function resourceLibrary(project,libraries){
 export function createResourcePricer(project,libraries,options={}){
  const master=resourceLibrary(project,libraries),cache=new Map(),indexes=new Map();
  const keepMissing=options.keepMissing??(project.resourceMissingPolicy==='keep'||master?.priceUpdateReference===true);
- // An unresolved wage must never become a confirmed cost merely because the
- // selected policy allows missing material/equipment prices to be retained.
- const canRetain=issue=>!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
+ // A wage fallback is allowed only after an actual, unique lookup in the
+ // known additional DB. An unresolved old snapshot is never enough.
+ const canRetain=issue=>issue.kind==='fallback-reference'||!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
  const originalRate=input=>{const r=structuredClone(options.useCurrent||input.components?input:(input.resourcePricing?.original||input));delete r.resourcePricing;return r;};
  function index(lib){if(!indexes.has(lib)){const map=new Map();for(const r of lib?.items||[]){if(r.table==='EstMainDat')continue;const k=r.code;map.set(k,[...(map.get(k)||[]),r]);}indexes.set(lib,map);}return indexes.get(lib);}
  const resources=(master?.items||[]).filter(r=>['노임','자재','장비'].includes(category(r))&&r.table!=='EstMainDat');
  const byName=new Map();for(const r of resources){const k=category(r)+'|'+norm(r.name);byName.set(k,[...(byName.get(k)||[]),r]);}
+ const primaryMatches=r=>(byName.get(category(r)+'|'+norm(r.name))||[]).filter(x=>same(x,r));
+ const additionalLabor=libraries.filter(l=>l!==master&&isAssemblyPriceReference(l)).flatMap(l=>(l.items||[]).filter(r=>category(r)==='노임'&&r.table!=='EstMainDat').map(r=>({...r,source:l.name,library:l.id})));
  // Some EST databases keep fuel prices only in the machinery evidence. Use a
  // fuel only if every matching evidence row agrees on its unit and price.
  const fuels=new Map();for(const [k,rows] of master?.details||[]){if(!k.startsWith('MachMainDat:'))continue;for(const r of rows){if(r.Index!==-2||norm(r.Name)!=='주연료'||!Number.isFinite(r.TU))continue;const key=norm(r.Size)+'|'+unitNorm(r.Unite),arr=fuels.get(key)||[];arr.push(r);fuels.set(key,arr);}}
  function match(r){
   const cat=category(r),override=project.resourceMappings?.[identity(r)];
   if(override?.master===master?.name){const picked=resources.filter(x=>x.code===override.code&&same(x,override)&&category(x)===cat&&resourceUnit(x.unit)===resourceUnit(r.unit));if(picked.length===1)return picked[0];}
-  let found=(byName.get(cat+'|'+norm(r.name))||[]).filter(x=>same(x,r));
+  let found=primaryMatches(r);
   if(found.length>1){const exact=found.filter(x=>x.code===r.code);if(exact.length===1)found=exact;}
   if(found.length===1)return found[0];
   if(cat==='자재'&&norm(r.name)==='주연료'){
@@ -44,8 +46,15 @@ export function createResourcePricer(project,libraries,options={}){
   const r=structuredClone(input),cat=category(r),key=identity(r);
   if(stack.includes(key)||stack.length>16)throw Error('순환 참조 또는 너무 깊은 구성 근거');
   if(['노임','자재'].includes(cat)){
-   const selected=match(r);if(!selected)return {rate:r,changes:[],issues:[{key,resource:structuredClone(r),kind:'missing-reference',reason:'기준 DB에 품명·규격·단위가 일치하는 '+cat+' 항목을 하나로 확인하지 못했습니다.'+(cat==='노임'?' 기준 노임 확인 전 계산 보류':'')}]};
-   return {rate:{...r,...Object.fromEntries([...costKeys,'total'].map(k=>[k,selected[k]])),priceReference:structuredClone(selected)},changes:[{name:r.name,spec:r.spec,category:cat,before:r.total,after:selected.total,source:master.name,code:selected.code}],issues:[]};
+   let selected=match(r),source=master.name;const issues=[];
+   // Multiple monthly matches are ambiguous, not absent: never bypass them
+   // using an additional DB. Likewise, multiple fallback matches need review.
+   if(!selected&&cat==='노임'&&primaryMatches(r).length===0){
+    const fallback=additionalLabor.filter(x=>same(x,r));
+    if(fallback.length===1){selected=fallback[0];source=selected.source;issues.push({key,resource:structuredClone(r),reference:structuredClone(selected),kind:'fallback-reference',reason:'기준 DB에 해당 노임이 없어 추가 DB에서 확인한 동일 직종 단가 적용 · '+source});}
+   }
+   if(!selected)return {rate:r,changes:[],issues:[{key,resource:structuredClone(r),kind:'missing-reference',reason:(cat==='노임'?'기준 DB 또는 추가 DB에서':'기준 DB에')+' 품명·규격·단위가 일치하는 '+cat+' 항목을 하나로 확인하지 못했습니다.'+(cat==='노임'?' 노임 확인 전 계산 보류':'')}]};
+   return {rate:{...r,...Object.fromEntries([...costKeys,'total'].map(k=>[k,selected[k]])),priceReference:structuredClone(selected)},changes:[{name:r.name,spec:r.spec,category:cat,before:r.total,after:selected.total,source,code:selected.code}],issues};
   }
   if(!r.components&&!['일위대가','단가산출','장비'].includes(cat))return {rate:r,changes:[],issues:[]};
   let base=r,expenseOnly=false;
