@@ -15,6 +15,12 @@ export function verifiedEstComponentRow(part,details){
  return String(row.Code||'')===String(part.code||'')&&same({name:row.Name,spec:row.Size,unit:row.Unite},part)?row:null;
 }
 
+export function isFixedPrintedComponent(part,details){
+ if(!part.fixedPrice||part.code||part.kind||!Number.isInteger(part.originalRecord)||!part.formulaSource)return false;
+ const rows=(details||[]).filter(r=>r._record===part.originalRecord&&!r.TitleCode);
+ return rows.length===1&&!rows[0].Code&&String(rows[0].LineData||'').replace(/[\x00-\x1f]/g,'')===part.formulaSource;
+}
+
 export function estResourcePolicy(part,details,parent){
  const row=verifiedEstComponentRow(part,details);
  if(!row||Number(row.LinkIndex||0)!==0||part.kind||part.calculationMode&&part.calculationMode!=='auto')return null;

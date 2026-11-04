@@ -3,7 +3,7 @@ import {editableAssembly} from './est-edit.js';
 import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';
 import {resolveRateLibrary,validateProject} from './project-data.js';
 import {repriceMachineOwnership} from './machine-pricing.js';
-import {verifiedEstComponentRow,estResourcePolicy} from './est-resource-policy.js';
+import {verifiedEstComponentRow,estResourcePolicy,isFixedPrintedComponent} from './est-resource-policy.js';
 
 const category=r=>(r.category&&r.category!=='내역단가'?r.category:null)||({L:'노임',M:'자재',E:'장비',U:'일위대가',D:'단가산출'}[r.code?.[0]]);
 const identity=r=>JSON.stringify([r.source,r.code,norm(r.name),String(r.spec||'').normalize('NFKC').replace(/\s/g,''),unitNorm(r.unit)]);
@@ -33,7 +33,7 @@ export function createResourcePricer(project,libraries,options={}){
  const keepMissing=options.keepMissing??(project.resourceMissingPolicy==='keep'||master?.priceUpdateReference===true);
  // A wage fallback is allowed only after an actual, unique lookup in the
  // known additional DB. An unresolved old snapshot is never enough.
- const canRetain=issue=>['fallback-reference','separate-resource','fixed-installation'].includes(issue.kind)||!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
+ const canRetain=issue=>['fallback-reference','separate-resource','fixed-installation','fixed-formula'].includes(issue.kind)||!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
  const originalRate=input=>{const r=structuredClone(options.useCurrent||input.components?input:(input.resourcePricing?.original||input));delete r.resourcePricing;return r;};
  function index(lib){if(!indexes.has(lib)){const map=new Map();for(const r of lib?.items||[]){if(r.table==='EstMainDat')continue;const k=r.code;map.set(k,[...(map.get(k)||[]),r]);}indexes.set(lib,map);}return indexes.get(lib);}
  const resources=(master?.items||[]).filter(r=>['노임','자재','장비'].includes(category(r))&&r.table!=='EstMainDat');
@@ -91,6 +91,10 @@ export function createResourcePricer(project,libraries,options={}){
    if(machine&&(part.machineOwnership||details?.find(r=>r._record===part.originalRecord)?.Index===-3))continue;
    if(part.kind||part.exclude||['horizontal','both'].includes(part.calculationMode))continue;
    if(part.calculationMode==='vertical'&&!next.components.some(p=>p.kind==='percent'&&!p.exclude&&!['vertical','both'].includes(p.calculationMode)))continue;
+   if(isFixedPrintedComponent(part,details)){
+    issues.push({key:identity(part),resource:structuredClone(part),kind:'fixed-formula',reason:'원문에 직접 입력된 고정 단가 · 수량 산식으로 계산 · DB 자원가격 갱신 대상 아님'});
+    continue;
+   }
    const policy=estResourcePolicy(part,details,base);
    if(policy){
     if(policy.kind==='separate'){

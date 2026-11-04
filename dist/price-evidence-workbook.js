@@ -44,7 +44,7 @@ export function buildPriceEvidence(project,libraries=[],baseStyles=contractorTem
     if(p.kind){
      let selected=node.calc.rows.slice(0,i).filter(x=>x.kind!=='subtotal');
      if(p.scope==='section')selected=selected.filter(x=>(x.section||'1')===(p.section||'1'));
-     if(p.scope==='tag')selected=selected.filter(x=>x.sumTag===p.sumTag);
+     if(p.scope==='tag')selected=(p.basisTag?node.calc.rows.slice(0,i):selected).filter(x=>x.sumTag===(p.basisTag||p.sumTag));
      if(p.scope==='nearest'){const near=node.calc.rows.slice(0,i).findLast(x=>(x.section||'1')===(p.section||'1')&&(p.basis==='total'?x.amount.total:x.amount[p.basis||'labor'])!==0);selected=near?[near]:[];}
      if(p.kind==='subtotal'&&p.startRow)selected=selected.filter(x=>x.index>=Number(p.startRow)-1);
      for(const [j,k] of costKeys.entries()){

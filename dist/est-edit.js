@@ -4,6 +4,7 @@ import {evaluateFormula} from './formula.js';
 import {costFromPrintedFormulas} from './est-cost-formulas.js';
 import {verifiedEstComponentRow} from './est-resource-policy.js';
 import {machineExchangeRate} from './machine-pricing.js';
+import {normalizeEstNumericExpression} from './est-numeric-formula.js';
 
 const fields={labor:'NC',material:'GC',expense:'JC'};
 const close=(a,b)=>Math.abs((a||0)-(b||0))<0.00001;
@@ -76,7 +77,7 @@ function editableCost(item,details,sourceItems){
   if(!Number.isFinite(price)||!Number.isFinite(result)||price<0||result<0)throw Error('단가산출의 숫자식을 확인하세요.');
   const start=text.indexOf(prices[0][0]);
   let expression=text.slice(start).split('=')[0].replace(prices[0][0],'1');
-  const clean=s=>s.replace(/[\x00-\x1f,\s]/g,'').replace(/×/g,'*').replace(/÷/g,'/').replace(/(?:인|대|㎥|㎡|시간|분|초|hr|ton|m3|m2|m|kg|ℓ|EA|본|조|개|일|회|대당|인당|시간당)/g,'');
+  const clean=normalizeEstNumericExpression;
   expression=clean(expression);
   // If the symbolic expression has a fully numeric expansion, use that expansion.
   if(!/^[\d.+*/()\-]+$/.test(expression)){

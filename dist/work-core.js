@@ -104,7 +104,7 @@ export function resourceReport(project,libraries){
   const calc=calculateAssemblyDetailed(editable.components,editable.calculation||{}),parts=[],masked=new Map();
   for(const p of calc.rows){
    if(p.replaceRunning&&aggregateCalculation(p)){const scale=p.percent/100;for(const old of parts)old.qty*=scale;for(const m of masked.values())for(const k of Object.keys(m.values))m.values[k]*=scale;continue;}
-   if(!aggregateCalculation(p)||p.kind==='percent'||p.kind==='subtotal'||!p.qty)continue;
+   if(!aggregateCalculation(p)||p.kind==='percent'||p.kind==='subtotal'||p.fixedPrice||!p.qty)continue;
    if(p.sourceComponent){const id=JSON.stringify([p.source,p.code,p.qtyExpression,p.section]);if(!masked.has(id))masked.set(id,{p,values:{}});const m=masked.get(id);m.values[p.sourceComponent]=(m.values[p.sourceComponent]||0)+p.qty;}
    else parts.push({...p});
   }
@@ -130,11 +130,11 @@ export function propagateResource(project,libraries,replacement){
   let editable=rate,lib=resolveRateLibrary(rate,libraries);
   if(!rate.components){const prefix=rate.code?.startsWith('U')?'HeadMainDat':'CostMainDat',detail=project.evidence?.find(e=>rateIdentity(e.rate)===key)?.rows||lib?.details?.find(([k])=>k===prefix+':'+rate.code)?.[1];editable=editableAssembly(rate,detail,lib?.items||[]);}
   const next=structuredClone(editable);let changed=false;
-  for(const part of next.components){if(part.kind)continue;let child=part;
+  for(const part of next.components){if(part.kind||part.fixedPrice)continue;let child=part;
    if(!part.components){const source=libraries.find(l=>l.id===part.library)||libraries.find(l=>l.name===part.source),candidates=source?.items.filter(i=>i.table!=='EstMainDat'&&i.code===part.code&&norm(i.name)===norm(part.name)&&norm(i.spec)===norm(part.spec)&&unitNorm(i.unit)===unitNorm(part.unit))||[];if(candidates.length===1)child=candidates[0];}
    const result=update(child,[...stack,key]);if(!result.changed)continue;
-   const preserve=Object.fromEntries(['qty','qtyExpression','section','sumTag','exclude','calculationMode','manualAmounts','sourceComponent','originalRecord'].filter(k=>k in part).map(k=>[k,part[k]]));
-   Object.assign(part,result.rate,preserve);if(part.sourceComponent){for(const k of costKeys)if(k!==part.sourceComponent)part[k]=0;part.total=costKeys.reduce((s,k)=>s+(part[k]||0),0);}changed=true;
+   const preserve=Object.fromEntries(['qty','qtyExpression','section','sumTag','basisTag','exclude','calculationMode','manualAmounts','sourceComponent','originalRecord'].filter(k=>k in part).map(k=>[k,part[k]]));
+   Object.assign(part,result.rate,preserve);if(part.sourceComponent){const leaf=!result.rate.components&&['노임','자재'].includes(result.rate.category);for(const k of costKeys)part[k]=k!==part.sourceComponent?0:leaf?result.rate.total:result.rate[k];part.total=costKeys.reduce((s,k)=>s+(part[k]||0),0);}changed=true;
   }
   if(changed){Object.assign(next,calculateAssemblyDetailed(next.components,next.calculation||{}).result);next.origin??={source:rate.source,code:rate.code};next.propagatedFrom={source:replacement.source,code:replacement.code};}
   return {rate:next,changed};

@@ -1,5 +1,6 @@
 import {amount,truncateProduct,truncateQuotient,cleanNumber} from './calc.js';
 import {evaluateFormula,evaluateVariables} from './formula.js';
+import {createExactFormulaContext} from './formula-precision.js';
 import {manualCalculation,manualAmounts,aggregateCalculation,validateCalculationMode} from './calculation-modes.js';
 export const costKeys=['labor','material','expense','other'];
 const zero=()=>({labor:0,material:0,expense:0,other:0,total:0});
@@ -10,7 +11,7 @@ export function hierarchyTotals(lines){const stack=[],result=new Map();
  }return result;
 }
 export function calculateAssemblyDetailed(parts,options={}){
- const variables=evaluateVariables(options.variables||''),rows=[],result=zero();
+ const variables=evaluateVariables(options.variables||''),exact=createExactFormulaContext(options.variables||''),rows=[],result=zero();
  const divisor=evaluateFormula(String(options.outputQuantity??1),variables.values);if(divisor<=0)throw Error('산출 기준 수량은 0보다 커야 합니다.');
  const digits=Number(options.componentDigits??0);if(!Number.isInteger(digits)||digits<0||digits>6)throw Error('구성 금액 소수 자릿수는 0~6입니다.');
  for(const [index,p] of parts.entries()){
@@ -21,7 +22,11 @@ export function calculateAssemblyDetailed(parts,options={}){
   if(p.kind==='percent'||p.kind==='subtotal'){
    let selected=rows.filter(r=>r.kind!=='subtotal');
    if(p.scope==='section')selected=selected.filter(r=>(r.section||'1')===(p.section||'1'));
-   if(p.scope==='tag'){if(!p.sumTag)throw Error('SUM에 사용할 색인을 입력하세요.');selected=selected.filter(r=>r.sumTag===p.sumTag);}
+   if(p.scope==='tag'){
+    const tag=p.basisTag||p.sumTag;if(!tag)throw Error('SUM에 사용할 색인을 입력하세요.');
+    selected=(p.basisTag?rows:selected).filter(r=>r.sumTag===tag);
+    if(p.basisTag&&selected.length!==1)throw Error('명시 SUM 기준 색인을 하나로 확인할 수 없습니다.');
+   }
    if(p.scope==='nearest'){
     const nearest=rows.findLast(r=>(r.section||'1')===(p.section||'1')&&(p.basis==='total'?r.amount.total:r.amount[p.basis||'labor'])!==0);
     selected=nearest?[nearest]:[];
@@ -41,7 +46,7 @@ export function calculateAssemblyDetailed(parts,options={}){
   }else{
    if(!String(p.qtyExpression??'').trim()&&cleanNumber(p.qty)===null)throw Error(`${p.name||'구성 항목'}: 수량을 확인하세요.`);
    row.qty=evaluateFormula(String(p.qtyExpression||(p.qty??0)),variables.values);if(row.qty<0)throw Error(`${p.name}: 수량은 0 이상이어야 합니다.`);
-   row.amount=zero();for(const k of costKeys){const n=cleanNumber(p[k]??0);if(n===null||(n<0&&!p.allowNegative))throw Error(`${p.name}: ${k} 단가를 확인하세요.`);row[k]=n;row.amount[k]=product(row.qty,n);}row.total=costKeys.reduce((n,k)=>n+row[k],0);row.amount.total=costKeys.reduce((n,k)=>n+row.amount[k],0);
+   row.amount=zero();for(const k of costKeys){const n=cleanNumber(p[k]??0);if(n===null||(n<0&&!p.allowNegative))throw Error(`${p.name}: ${k} 단가를 확인하세요.`);row[k]=n;row.amount[k]=p.qtyExpression?exact.truncateProduct(p.qtyExpression,p[k]??0,rowDigits):product(row.qty,n);}row.total=costKeys.reduce((n,k)=>n+row[k],0);row.amount.total=costKeys.reduce((n,k)=>n+row.amount[k],0);
   }
   if(manualCalculation(p))row.amount=manualAmounts(p);
   if(p.replaceRunning&&aggregateCalculation(p)){for(const k of costKeys)result[k]=0;}
