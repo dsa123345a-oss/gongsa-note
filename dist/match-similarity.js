@@ -5,8 +5,9 @@ export const nameNorm=value=>norm(value).replace(/소프트(?:실)?(?:제수|지
  .replace(/^앵글밸브(?:10kg\/cm2)?자재포함$/,'앵글밸브교체').replace(/아스팔트(?=소운반)/g,'아스콘');
 // Locality suffixes are labels, not different haul destinations. Keep this
 // separate from arbitrary Korean words such as 표면 or 단면.
-const localAreas='금강송|후포|온정|평해|울진|죽변|기성|근남|매화|북';
-export const locationTextNorm=value=>String(value??'').normalize('NFKC').replace(new RegExp('('+localAreas+')(?:읍|면)','g'),'$1');
+const localAliases={금강송면:'금강송',후포면:'후포',온정면:'온정',평해읍:'평해',울진읍:'울진',죽변면:'죽변',기성면:'기성',근남면:'근남',매화면:'매화',북면:'북면'};
+const fullLocalNames=Object.keys(localAliases).join('|'),shortLocalNames=[...new Set(Object.values(localAliases))].join('|');
+export const locationTextNorm=value=>String(value??'').normalize('NFKC').replace(new RegExp(fullLocalNames,'g'),v=>localAliases[v]);
 // Normalize notation, not the stored specification or the material identity.
 export const specNorm=value=>locationTextNorm(value).toLowerCase().replace(/\s+/g,'').replace(/[×*]/g,'x').replace(/ton/g,'톤').replace(/(dn|d|[φø∅])=/g,'$1')
  .replace(/(^|[=(/,x·;\-])(?:dn|d|s(?=\d+(?:\.\d+)?su)|[φø∅])?(\d+(?:\.\d+)?)(?:su|a|mm)?(?=$|[)/,x·;\-])/g,(_,prefix,size)=>prefix+'d'+Number(size));
@@ -69,24 +70,35 @@ function materials(row){
 }
 export function transportRoute(value){
  const s=String(value||'').normalize('NFKC').replace(/\s+/g,'').replace(/<[-=]>|[-=]>/g,'↔');
- return s.match(/([가-힣]+)[↔⇔→⇒]([가-힣]+)/)?.slice(1).map(v=>v.replace(/(?:읍|면)$/,''))||null;
+ return s.match(/([가-힣]+)[↔⇔→⇒]([가-힣]+)/)?.slice(1).map(locationTextNorm)||null;
 }
 const wasteWork=row=>/폐기물.*(?:처리|운반)/.test(nameNorm(row.name));
 export function wasteMatchIssue(line){
  if(!wasteWork(line))return '';
  if(line.specError)return '폐기물 규격 수식 미계산';
  if(!materials(line).size)return '폐기물 재질 미확정';
- if(!transportRoute(line.spec)&&!wasteOrigin(line))return '폐기물 운반 지역 미확정';
+ const place=wasteLocation(line);
+ if(place.ambiguous)return '폐기물 운반 지역이 여러 곳으로 표시됨';
+ if(!place.origin)return '폐기물 운반 지역 미확정';
  return '';
 }
-function wasteOrigin(line){
- const route=transportRoute(line.spec);if(route)return route[0];
- // Each section's own filename/location, never the first section's project address.
- return [line.spec,line.location,line.sourceFile].map(s=>{
-  const text=String(s||'').normalize('NFKC');
-  return text.match(new RegExp('('+localAreas+')(?:읍|면)'))?.[1]||text.match(new RegExp('(?:^|[^가-힣])('+localAreas+')(?=$|[^가-힣])'))?.[1];
- }).find(Boolean)||'';
+function wasteLocation(line){
+ const routes=[transportRoute(line.spec),transportRoute(line.name)].filter(Boolean),uniqueRoutes=new Set(routes.map(r=>r.join('|')));
+ if(uniqueRoutes.size>1)return {origin:'',ambiguous:true};
+ if(routes.length)return {origin:routes[0][0]==='북'?'':routes[0][0],ambiguous:false};
+ // Resolve each evidence level as a whole: two places in one section must not
+ // silently select the first. A project title is supplied only for a single site.
+ for(const texts of [[line.spec,line.name],[line.location,line.group,String(line.sourceFile||'').split(/[\\/]/).at(-1),...(line.wasteContext?.section||[])],line.wasteContext?.project||[]]){
+  const places=new Set();
+  for(const value of texts){
+   const text=String(value||'').normalize('NFKC'),remaining=text.replace(new RegExp(fullLocalNames,'g'),v=>{places.add(localAliases[v]);return ' ';});
+   for(const m of remaining.matchAll(new RegExp('(?:^|[^가-힣])('+shortLocalNames+')(?=$|[^가-힣])','g')))places.add(m[1]);
+  }
+  if(places.size)return {origin:places.size===1?[...places][0]:'',ambiguous:places.size>1};
+ }
+ return {origin:'',ambiguous:false};
 }
+const wasteOrigin=line=>wasteLocation(line).origin;
 // A common "소운반" suffix must never make different loads interchangeable.
 // Units on quantity sheets are not authoritative; identify load and method instead.
 function shortHaul(row){
@@ -131,10 +143,11 @@ export function incompatibleWorkReason(line,item){
  if(/xl삼방티/.test(a)&&/xl암티/.test(b)||/xl암티/.test(a)&&/xl삼방티/.test(b))return '티의 연결 용도가 다름';
  const machine=s=>/백호|굴삭|굴착기/.test(s||''),manual=s=>/인력/.test(s||'')&&!machine(s);
  if(machine(line.spec)&&manual(item.spec)||manual(line.spec)&&machine(item.spec))return '인력과 기계 시공 방식이 다름';
- const ar=transportRoute(line.spec),br=transportRoute(item.spec);if(ar&&br&&ar.join('|')!==br.join('|'))return '운반 구간이 다름';
+ const ar=transportRoute(line.spec)||(wasteWork(line)?transportRoute(line.name):null),br=transportRoute(item.spec)||(wasteWork(item)?transportRoute(item.name):null);if(ar&&br&&ar.join('|')!==br.join('|'))return '운반 구간이 다름';
  if(wasteWork(line)&&wasteWork(item)){
+  if(wasteLocation(line).ambiguous||wasteLocation(item).ambiguous)return '폐기물 운반 지역이 여러 곳으로 표시됨';
   const origin=wasteOrigin(line),destinationOrigin=wasteOrigin(item);if(origin&&destinationOrigin&&origin!==destinationOrigin)return '폐기물 운반 지역이 다름';
-  if(ar&&!br)return '폐기물 운반 구간 확인 필요';
+  if(origin&&!destinationOrigin||ar&&!br)return '폐기물 운반 구간 확인 필요';
  }
  for(const action of ['깨기','철거','절단'])if(a.includes(action)!==b.includes(action))return '작업 종류가 다름';
  const materialOnly=item.category==='자재'||item.category==='내역단가'&&item.material>0&&!item.labor&&!item.expense&&!/설치|접합|부설|포설|교체/.test(b);

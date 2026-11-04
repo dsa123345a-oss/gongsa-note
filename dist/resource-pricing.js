@@ -3,12 +3,25 @@ import {editableAssembly} from './est-edit.js';
 import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';
 import {resolveRateLibrary,validateProject} from './project-data.js';
 import {repriceMachineOwnership} from './machine-pricing.js';
+import {verifiedEstComponentRow,estResourcePolicy} from './est-resource-policy.js';
 
 const category=r=>(r.category&&r.category!=='내역단가'?r.category:null)||({L:'노임',M:'자재',E:'장비',U:'일위대가',D:'단가산출'}[r.code?.[0]]);
 const identity=r=>JSON.stringify([r.source,r.code,norm(r.name),String(r.spec||'').normalize('NFKC').replace(/\s/g,''),unitNorm(r.unit)]);
 const specKey=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s/g,'').replace(/[×＊]/g,'*').replace(/\((\d+종)\)/g,'$1');
 const resourceUnit=u=>unitNorm(String(u||'').replace(/당$/,''));
 const same=(a,b)=>norm(a.name)===norm(b.name)&&specKey(a.spec)===specKey(b.spec)&&resourceUnit(a.unit)===resourceUnit(b.unit);
+function laborSourceWithWorkDescription(part,candidates,details){
+ // EST can put a work description in a labor component's Size field. Only
+ // trust that description when the unchanged row still points to a unique
+ // occupation in its own source DB; never drop arbitrary or real wage specs.
+ if(!specKey(part.spec)||!Number.isInteger(part.originalRecord))return null;
+ const row=verifiedEstComponentRow(part,details);
+ if(!row)return null;
+ const labor=candidates.filter(r=>r.table==='LaborcDat');
+ if(labor.length!==1)return null;
+ const source=labor[0];
+ return category(source)==='노임'&&!specKey(source.spec)&&norm(source.name)===norm(part.name)&&resourceUnit(source.unit)===resourceUnit(part.unit)?source:null;
+}
 export const isAssemblyPriceReference=lib=>lib?.bundledDefault==='assembly'||String(lib?.name||'').normalize('NFKC').replace(/\s/g,'').toLowerCase()==='상수도공사메인(26년)소형감압변수정.ebkx';
 export function resourceLibrary(project,libraries){
  const s=project.resourcePriceLibrary;
@@ -20,7 +33,7 @@ export function createResourcePricer(project,libraries,options={}){
  const keepMissing=options.keepMissing??(project.resourceMissingPolicy==='keep'||master?.priceUpdateReference===true);
  // A wage fallback is allowed only after an actual, unique lookup in the
  // known additional DB. An unresolved old snapshot is never enough.
- const canRetain=issue=>issue.kind==='fallback-reference'||!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
+ const canRetain=issue=>['fallback-reference','separate-resource','fixed-installation'].includes(issue.kind)||!!keepMissing&&issue.kind==='missing-reference'&&category(issue.resource||{})!=='노임';
  const originalRate=input=>{const r=structuredClone(options.useCurrent||input.components?input:(input.resourcePricing?.original||input));delete r.resourcePricing;return r;};
  function index(lib){if(!indexes.has(lib)){const map=new Map();for(const r of lib?.items||[]){if(r.table==='EstMainDat')continue;const k=r.code;map.set(k,[...(map.get(k)||[]),r]);}indexes.set(lib,map);}return indexes.get(lib);}
  const resources=(master?.items||[]).filter(r=>['노임','자재','장비'].includes(category(r))&&r.table!=='EstMainDat');
@@ -78,15 +91,29 @@ export function createResourcePricer(project,libraries,options={}){
    if(machine&&(part.machineOwnership||details?.find(r=>r._record===part.originalRecord)?.Index===-3))continue;
    if(part.kind||part.exclude||['horizontal','both'].includes(part.calculationMode))continue;
    if(part.calculationMode==='vertical'&&!next.components.some(p=>p.kind==='percent'&&!p.exclude&&!['vertical','both'].includes(p.calculationMode)))continue;
+   const policy=estResourcePolicy(part,details,base);
+   if(policy){
+    if(policy.kind==='separate'){
+     for(const k of [...costKeys,'total'])part[k]=0;
+     delete part.priceReference;delete part.components;
+     issues.push({key:identity(part),resource:structuredClone(part),kind:'separate-resource',reason:'원본 별도 계상 자재 · 산출 안 단가 0원 유지'+(policy.restored?' · 이전 자동 갱신으로 더해진 자재비 복원':'')});
+    }else if(policy.kind==='fixed-installation')issues.push({key:identity(part),resource:structuredClone(part),kind:'fixed-installation',reason:'추가 DB의 직접 입력 고정 설치비 유지 · 직종별 노임 갱신 대상 아님'});
+    else if(policy.kind==='conflict')issues.push({key:identity(part),resource:structuredClone(part),kind:'separate-conflict',reason:policy.reason});
+    continue;
+   }
    const sourceCandidates=(index(lib).get(part.code)||[]);
    let child=part.components?{...sourceCandidates.find(x=>same(x,part)),...part}:sourceCandidates.find(x=>same(x,part));
+   if(!child&&!part.components)child=laborSourceWithWorkDescription(part,sourceCandidates,details);
    // EST machinery fuel labels are intentionally generic (주연료 / 경유).
    if(!child&&sourceCandidates.length===1&&norm(part.name)==='주연료'&&category(sourceCandidates[0])==='자재')child=sourceCandidates[0];
    if(!child)child={...part,category:part.labor?'노임':part.material?'자재':category(part),total:costKeys.reduce((s,k)=>s+(part[k]||0),0)};
    if(!child.category&&!part.components){continue;} // explicit expense / ownership / fee
    try{
     const result=walk(child,lib,[...stack,key]);changes.push(...result.changes);issues.push(...result.issues);
-    for(const k of costKeys)part[k]=part.sourceComponent&&part.sourceComponent!==k?0:result.rate[k];
+    // A leaf resource can be charged to another cost component by the source
+    // formula. Assemblies and machinery still select only their own component.
+    const projectLeaf=part.sourceComponent&&!result.rate.components&&['노임','자재'].includes(category(result.rate));
+    for(const k of costKeys)part[k]=part.sourceComponent&&part.sourceComponent!==k?0:projectLeaf?result.rate.total:result.rate[k];
     part.total=costKeys.reduce((s,k)=>s+(part[k]||0),0);
     // Preserve the exact source snapshot even when an unmatched resource keeps
     // its original price. Reopening a saved project must not need a current DB
@@ -141,3 +168,11 @@ export function refreshProjectResources(project,libraries){
  next.ratesReviewed=false;return {project:validateProject(next),rows,master:pricer.master};
 }
 export {identity as resourceIdentity};
+export function resourcePricingMessage(rate){
+ const pricing=rate?.resourcePricing;
+ if(pricing?.ready!==false)return '선택한 산출 구성과 적용 단가를 내역에 반영했습니다.';
+ const blocked=pricing.warnings?.filter(w=>!w.retained)||pricing.issues||[];
+ const first=blocked[0],name=first?.resource?.name?.replace(/\s+/g,' ').trim();
+ const reason=first?.reason||'노임·자재·장비 기준을 확인하세요.';
+ return '단가 미확정 · '+(name?name+' · ':'')+reason+(blocked.length>1?' 외 '+(blocked.length-1)+'건':'')+' 작업도구의 노임·자재·장비 기준에서 확인하세요.';
+}

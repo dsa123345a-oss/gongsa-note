@@ -5,6 +5,7 @@ import {editableAssembly} from './est-edit.js';
 import {machineryRate} from './work-core.js';
 import {aggregateCalculation,manualCalculation} from './calculation-modes.js';
 import {withEstMetadata,copyMissingEstMetadata} from './est-metadata.js';
+import {estResourcePolicy} from './est-resource-policy.js';
 
 export const evidenceSheetNames=['일위단가표','기계경비단가산출표','자재단가표','노임단가표'];
 const category=r=>(r.category!=='내역단가'&&r.category)||({HeadTitleDat:'일위대가',CostTitleDat:'단가산출',MachTitleDat:'장비',StuffcDat:'자재',LaborcDat:'노임'})[r.table]||(/^D/.test(r.code||'')?'단가산출':/^U/.test(r.code||'')?'일위대가':/^E/.test(r.code||'')?'장비':/^L/.test(r.code||'')?'노임':/^M/.test(r.code||'')?'자재':r.components?'일위대가':r.labor&&!r.material&&!r.expense?'노임':r.material&&!r.labor&&!r.expense?'자재':'일위대가');
@@ -36,6 +37,8 @@ export function collectPriceEvidence(project,libraries=[]){
   }else if(rate.machineInputs){try{node.machine=machineryRate(rate.machineInputs);node.verified=costKeys.every(k=>node.machine[k]===(rate[k]||0));if(!node.verified)node.issues.push('장비 입력값과 현재 단가가 다름');}catch(e){node.issues.push(e.message);}}
   for(const [i,part] of (node.parts||[]).entries()){
    if(part.kind||part.machineOwnership)continue;
+   const policy=estResourcePolicy(part,raw,rate);
+   if(policy&&['separate','note','fixed-installation'].includes(policy.kind))continue;
    if(!aggregateCalculation(part)||(!manualCalculation(part)&&Number(node.calc?.rows[i]?.qty??part.qty)===0))continue;
    // A machine may be referenced separately for labor/material/expense. Only
    // follow resources contributing to the component actually used by this row.

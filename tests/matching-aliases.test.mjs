@@ -28,7 +28,7 @@ test('SU 관경 별칭은 관경 숫자와 복합 관경 순서를 보존한다'
  assert.notEqual(specNorm('S25SU'),specNorm('D20'));
 });
 test('읍·면 생략을 동일 지역으로 인식하되 다른 폐기물 지역은 제외한다',()=>{
- for(const [full,short] of [['평해읍','평해'],['후포면','후포'],['울진읍','울진'],['기성면','기성'],['온정면','온정'],['북면','북']]){
+ for(const [full,short] of [['평해읍','평해'],['후포면','후포'],['울진읍','울진'],['기성면','기성'],['온정면','온정'],['죽변면','죽변'],['근남면','근남'],['매화면','매화'],['북면','북면']]){
   const line=row('폐기물처리',`콘크리트(${full})`,'톤'),rate=item('폐기물처리',`콘크리트(${short}⇔울진)`,'TON');
   assert.equal(wasteMatchIssue(line),'');assert.equal(compatibleWork(line,rate),true);
   assert.equal(compatibleWork(line,{...rate,spec:'콘크리트(다른지역⇔울진)'}),false);

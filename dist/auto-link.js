@@ -3,6 +3,19 @@ import {referencedQuantityRate} from './quantity-contract.js';
 import {nameNorm,textSimilarity,compareSpecs,specNorm,pipeWork,compatibleUnits,compatibleWork,incompatibleWorkReason,wasteMatchIssue} from './match-similarity.js';
 import {norm,unitNorm,amount} from './calc.js';
 import {connectionKind,learningIndex,learnedChoices,targetIdentity,getActiveLearning} from './connection-learning.js';
+import {sectionCaption} from './project-labels.js';
+
+function wasteContexts(project){
+ const lines=project.lines||[],sections=lines.filter(l=>l.level>=2),files=new Set(lines.map(l=>l.sourceFile).filter(Boolean));
+ const singleSite=sections.length<=1&&files.size<=1,projectText=singleSite?[project.title,project.location,project.quantityFile]:[],contexts=new Map();
+ let section=null;
+ for(const line of lines){
+  if(line.level>=2)section=line;
+  contexts.set(line.id,{section:section?[sectionCaption(section),section.location,String(section.sourceFile||'').split(/[\\/]/).at(-1)]:[],project:projectText});
+ }
+ return contexts;
+}
+const withWasteContext=(line,contexts)=>({...line,wasteContext:contexts.get(line.id)});
 
 export const lineSignature=l=>[norm(l.group),norm(l.name),norm(l.spec),unitNorm(l.unit)].join('|');
 export const pendingAuto=l=>!!l.autoMatch&&!l.autoMatch.reviewed&&l.status==='confirmed';
@@ -12,11 +25,12 @@ export function resetPendingAutoLinks(project,ids=null){
 }
 export function applyReplannedLinks(project,rows,batchId){return applyAutoLinks(resetPendingAutoLinks(project,new Set(rows.filter(r=>r.rate).map(r=>r.line.id))),rows,batchId);}
 
-export function incompatibleAutoLinks(project){return project.lines.filter(l=>!l.level&&l.rate&&l.autoMatch?.before&&!l.autoMatch.reviewed&&!compatibleWork(l.autoMatch.before,l.rate));}
+export function incompatibleAutoLinks(project){const contexts=wasteContexts(project);return project.lines.filter(l=>{if(l.level||!l.rate||!l.autoMatch?.before||l.autoMatch.reviewed)return false;const before=withWasteContext({...l.autoMatch.before,id:l.id},contexts);return !!wasteMatchIssue(before)||!compatibleWork(before,l.rate);});}
 export function resetIncompatibleAutoLinks(project){
- const next=structuredClone(project),ids=new Set(incompatibleAutoLinks(project).map(l=>l.id));
+ const next=structuredClone(project),ids=new Set(incompatibleAutoLinks(project).map(l=>l.id)),contexts=wasteContexts(project);
  for(const l of next.lines){if(!ids.has(l.id))continue;const before=l.autoMatch.before;
-  l.autoRepair={name:l.rate.name,spec:l.rate.spec,source:l.rate.source,reason:incompatibleWorkReason(before,l.rate)||'단위가 다름'};
+  const matching=withWasteContext({...before,id:l.id},contexts);
+  l.autoRepair={name:l.rate.name,spec:l.rate.spec,source:l.rate.source,reason:wasteMatchIssue(matching)||incompatibleWorkReason(matching,l.rate)||'단위가 다름'};
   for(const key of ['name','spec','unit'])l[key]=before[key];
   l.rate=null;l.status='unmatched';l.factor=before.factor??1;delete l.originalExpenseRate;delete l.autoMatch;delete l.proposed;
  }
@@ -31,12 +45,13 @@ export function preferredLibrary(project,libraries){
 }
 export function planAutoLinks(project,libraries,libraryId='',priorityId='',profile=getActiveLearning()){
  const items=libraries.filter(l=>!libraryId||l.id===libraryId).flatMap(l=>l.items.map(item=>({item,identity:targetIdentity(item),name:norm(item.name),matchingName:nameNorm(item.name),spec:norm(item.spec),unit:unitNorm(item.unit),source:l.name,library:l.id})));
- const cache=new Map(),nameScores=new Map(),learned=learningIndex(project.connectionLearningEnabled===false?{rules:[]}:profile),kind=connectionKind(project),pricer=createResourcePricer(project,libraries);
+ const cache=new Map(),nameScores=new Map(),learned=learningIndex(project.connectionLearningEnabled===false?{rules:[]}:profile),kind=connectionKind(project),pricer=createResourcePricer(project,libraries),contexts=wasteContexts(project);
  return project.lines.filter(l=>!l.level&&!l.exclude&&!l.surcharge&&!l.deduction&&l.status!=='confirmed').map(line=>{
-  const signature=lineSignature(line),site=/폐기물/.test(nameNorm(line.name))?[line.sourceFile||'',line.location||''].join('|'):'',cacheKey=signature+'|'+site+'|'+(line.specError||'')+'|'+JSON.stringify(line.dbReference||null);if(cache.has(cacheKey))return {...cache.get(cacheKey),line};
-  const unresolved=wasteMatchIssue(line);if(unresolved){const result={line,reason:unresolved+' · 원본 규격 확인 후 연결',recommended:false,exact:false,score:0};cache.set(cacheKey,result);return result;}
+  const matching=withWasteContext(line,contexts),signature=lineSignature(line),site=/폐기물/.test(nameNorm(line.name))?JSON.stringify([line.sourceFile,line.location,matching.wasteContext]):'',cacheKey=signature+'|'+site+'|'+(line.specError||'')+'|'+JSON.stringify(line.dbReference||null);if(cache.has(cacheKey))return {...cache.get(cacheKey),line};
+  const unresolved=wasteMatchIssue(matching);if(unresolved){const result={line,reason:unresolved+' · 원본 규격 확인 후 연결',recommended:false,exact:false,score:0};cache.set(cacheKey,result);return result;}
   const reference=referencedQuantityRate(line,items);
   if(reference){
+   if(reference.rate&&!compatibleWork(matching,reference.rate)){const result={line,reason:incompatibleWorkReason(matching,reference.rate)+' · 원본 규격 확인 후 연결',recommended:false,exact:false,score:0};cache.set(cacheKey,result);return result;}
    const priced=reference.rate&&pricer?pricer.reprice(reference.rate):null;
    const result={line,rate:priced?.rate||reference.rate,reason:reference.reason+(priced?' · '+(priced.ready?'기준 노임·자재·장비 재계산':'기준가격 확인 필요'):''),recommended:!!reference.rate&&priced?.ready!==false,exact:!!reference.rate,score:reference.rate?100:0};
    cache.set(cacheKey,result);return result;
@@ -50,7 +65,7 @@ export function planAutoLinks(project,libraries,libraryId='',priorityId='',profi
    if(item.total<0||['labor','material','expense'].some(k=>item[k]<0))continue;
    const knowledge=choiceMap.get(entry.identity);
    let n=scores.get(entry.matchingName);if(n===undefined){n=textSimilarity(matchingName,entry.matchingName);scores.set(entry.matchingName,n);}if(n<0.48&&!knowledge?.strong)continue;
-   if(!compatibleWork(line,item))continue;
+   if(!compatibleWork(matching,item))continue;
    const key=JSON.stringify([entry.library,entry.source,item.code,entry.name,entry.spec,entry.unit,item.labor,item.material,item.expense,item.other]);if(seen.has(key))continue;seen.add(key);
    const comparison=compareSpecs(line.spec,item.spec,{diameterAliases:pipeWork(line)&&pipeWork(item)}),numericMismatch=comparison.mismatch;
    const remembered=!!saved&&saved.source===item.source&&saved.code===item.code&&norm(saved.name)===entry.name&&norm(saved.spec)===entry.spec;
@@ -83,9 +98,9 @@ export function planAutoLinks(project,libraries,libraryId='',priorityId='',profi
 
 export function applyAutoLinks(project,rows,batchId){
  const selected=new Map(rows.filter(r=>r.rate).map(r=>[r.line.id,r]));
- const next=structuredClone(project);
+ const next=structuredClone(project),contexts=wasteContexts(project);
  next.lines=next.lines.map(line=>{
-  const match=selected.get(line.id);if(!match||line.level||line.exclude||line.status==='confirmed'||wasteMatchIssue(line)||!compatibleWork(line,match.rate))return line;
+  const match=selected.get(line.id),matching=withWasteContext(line,contexts);if(!match||line.level||line.exclude||line.status==='confirmed'||wasteMatchIssue(matching)||!compatibleWork(matching,match.rate))return line;
   const before=structuredClone(line),rate=structuredClone(match.rate);
   if(rate.resourcePricing?.master&&!next.resourcePriceLibrary)next.resourcePriceLibrary={id:rate.resourcePricing.masterId,name:rate.resourcePricing.master};
   const result={...line,name:rate.name,spec:rate.spec||'',unit:rate.unit||'',rate,status:rate.resourcePricing?.ready===false?'proposed':'confirmed',factor:1,autoMatch:{batchId,reviewed:false,reason:match.reason,score:match.score,before}};

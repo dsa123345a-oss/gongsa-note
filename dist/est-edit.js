@@ -2,11 +2,33 @@ import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';
 import {norm,unitNorm} from './calc.js';
 import {evaluateFormula} from './formula.js';
 import {costFromPrintedFormulas} from './est-cost-formulas.js';
+import {verifiedEstComponentRow} from './est-resource-policy.js';
+import {machineExchangeRate} from './machine-pricing.js';
 
 const fields={labor:'NC',material:'GC',expense:'JC'};
 const close=(a,b)=>Math.abs((a||0)-(b||0))<0.00001;
+function projectHeadResource(part,details,sourceItems){
+ if(part.sourceComponent||part.kind||part.components||part.calculationMode&&part.calculationMode!=='auto')return;
+ const row=verifiedEstComponentRow(part,details),target={1:'material',2:'labor',3:'expense'}[row?.SCheck];
+ if(!row||!target)return;
+ const table={M:'StuffcDat',L:'LaborcDat'}[row.Code?.[0]],natural=table==='StuffcDat'?'material':'labor';
+ if(!table)return;
+ const raw={labor:row.NU||0,material:row.GU||0,expense:row.JU||0,other:row.SU||0};
+ if(!(raw[target]>0)||!costKeys.every(k=>Number.isFinite(raw[k])&&(k===target||raw[k]===0)))return;
+ const sources=sourceItems.filter(r=>r.code===row.Code&&r.table===table&&!r.components&&verifiedEstComponentRow({...r,originalRecord:row._record},[row]));
+ if(sources.length!==1||!costKeys.every(k=>Number.isFinite(sources[0][k]||0)&&(k===natural||!(sources[0][k]||0))))return;
+ const original=costKeys.every(k=>Number(part[k]||0)===raw[k]),ref=part.priceReference;
+ const applied=ref&&ref.category===(natural==='material'?'자재':'노임')&&verifiedEstComponentRow({...ref,code:row.Code,originalRecord:row._record},[row])&&costKeys.every(k=>Number(part[k]||0)===Number(ref[k]||0));
+ // Recover only the explicit allocation flag. Reading or printing saved
+ // components must not change their amounts; repricing applies this target.
+ if(original||applied)part.sourceComponent=target;
+}
 export function editableAssembly(item,details,sourceItems=[]){
- if(item.components)return structuredClone(item);
+ if(item.components){
+  const next=structuredClone(item);
+  if((item.table==='HeadTitleDat'||item.category==='일위대가')&&details?.some(r=>r.TitleCode&&r.Name))for(const part of next.components)projectHeadResource(part,details,sourceItems);
+  return next;
+ }
  if(!details?.length)throw Error('구성 근거가 없는 단가입니다. 직접 구성 항목을 작성하세요.');
  if(item.category==='장비'||item.table==='MachTitleDat')return editableMachine(item,details,sourceItems);
  if(!details.some(r=>r.TitleCode&&r.Name)){try{return editableCost(item,details,sourceItems);}catch{return costFromPrintedFormulas(item,details,sourceItems);}}
@@ -24,6 +46,7 @@ export function editableAssembly(item,details,sourceItems=[]){
    Object.assign(p,{kind:'percent',scope:r.LinkIndex===62?'tag':'all',basis,target,percent:r.GN});
   }else if(r.GN==null&&!r.TC&&!r.NC&&!r.GC&&!r.JC){p.qty=0;p.qtyExpression='0';}
   else if(!Number.isFinite(r.GN)||r.GN<0)throw Error('구성 수량을 확인할 수 없습니다.');
+  projectHeadResource(p,details,sourceItems);
   parts.push(p);original.push(r);
  }
  if(!parts.length)throw Error('편집할 구성 항목이 없습니다.');
@@ -116,7 +139,7 @@ function editableMachine(item,details,sourceItems){
   if(r.Unite==='%')Object.assign(p,{kind:'percent',scope:'nearest',basis:target,target,percent:r.GN});
   else if(target==='expense'){
    // Original machine ownership coefficient is expressed in ten-millionths.
-   const currency=basis.find(x=>x.Index===r.Ratio)?.TC??(r.Ratio===0?1:null);
+   const currency=machineExchangeRate(r,basis);
    if(!Number.isFinite(currency))throw Error('기계경비 환율 기준이 없습니다.');
    const v='FX'+(variables.length+1);variables.push(v+' = '+currency);Object.assign(p,{qtyExpression:`${r.GN}*${v}/10000000`,expense:r.TU,machineOwnership:{name:r.Name,spec:r.Size||'',coefficient:r.GN,currencyRatio:r.Ratio,fxVariable:v}});
   }else if(target==='labor'){
