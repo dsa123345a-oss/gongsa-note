@@ -7,13 +7,25 @@ const machineName=s=>textKey(s).replace(/^굴착기(?=\(|$)/,'굴삭기');
 // These are source-location fields, not calculation inputs. Everything else,
 // including every component, expression, coefficient, variable and result,
 // must agree before verified machines can share an output entry.
-const machineTracking=new Set(['id','library','source','code','record','originalRecord']);
+const memoFields=new Set(['bigo','remark','rowBigo','Bigo','Remark']);
+const machineTracking=new Set(['id','library','source','code','record','originalRecord',...memoFields,'quotePages','quoteSources','prices']);
 function machineValue(value,key=''){
  if(Array.isArray(value))return value.map(v=>machineValue(v));
  if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>!machineTracking.has(k)).map(k=>[k,machineValue(value[k],k)]));
  return key==='name'?machineName(value):value;
 }
-const machineReference=r=>Object.fromEntries(['source','library','code','id','record','name','spec','unit'].filter(k=>r[k]!=null).map(k=>[k,r[k]]));
+const machineReference=r=>Object.fromEntries(['source','library','code','id','record','name','spec','unit','bigo','remark','rowBigo'].filter(k=>r[k]!=null).map(k=>[k,r[k]]));
+// Notes cannot split otherwise identical calculations. Union their visible
+// lines on the output copy while keeping each original note in its reference.
+function mergeMachineNotes(target,source){
+ if(!target||!source||typeof target!=='object'||typeof source!=='object')return;
+ for(const [key,value] of Object.entries(source)){
+  if(memoFields.has(key)&&typeof value==='string'){
+   const lines=[...String(target[key]??'').split(/\r?\n/),...value.split(/\r?\n/)],seen=new Set();
+   target[key]=lines.filter(s=>s.trim()).filter(s=>{const k=s.trim();if(seen.has(k))return false;seen.add(k);return true;}).join('\n');
+  }else if(value&&typeof value==='object'&&target[key])mergeMachineNotes(target[key],value);
+ }
+}
 // Output-only canonicalization. Never change the rates used by the estimate.
 export function collectPrintEvidence(project,libraries=[]){
  const graph=collectPriceEvidence(project,libraries),queue=[...graph.nodes],visited=new Map();
@@ -41,7 +53,7 @@ export function collectPrintEvidence(project,libraries=[]){
   // Fuel often appears as "주연료 / 경유" in a recipe. The applied reference
   // identifies the same resource as "경유" in the material table. Only use it
   // when the units and all applied prices agree; never replace a manual price.
-  if(resource&&ref&&unitNorm(r.unit)===unitNorm(ref.unit)&&keys.every(k=>Number(r[k]||0)===Number(ref[k]||0)))r={...r,...Object.fromEntries(['name','spec','unit','code','source','library','prices','quotePages','remark'].map(k=>[k,ref[k]]))};
+  if(resource&&ref&&unitNorm(r.unit)===unitNorm(ref.unit)&&keys.every(k=>Number(r[k]||0)===Number(ref[k]||0)))r={...r,...Object.fromEntries(['name','spec','unit','code','source','library','prices','quotePages','remark','bigo'].map(k=>[k,ref[k]]))};
   if(kind==='노임')r={...r,name:String(r.name||'').replace(/[\s\u200b-\u200d\ufeff]/g,'')};
   const identity=[kind,machine?machineName(r.name):textKey(r.name),textKey(r.spec),unitNorm(r.unit)];
   if(resource)identity.push(...keys.map(k=>r[k]||0));
@@ -49,8 +61,8 @@ export function collectPrintEvidence(project,libraries=[]){
   else identity.push(r.source,r.code,...keys.map(k=>r[k]||0),r.components,r.calculation,r.sourceComponent);
   const key=JSON.stringify(identity);let existing=distinct.get(key);
   if(!existing){
-   existing={...node,rate:{...r},uses:new Set(node.uses),issues:[...node.issues],printComponents:machine?[]:null,...(machine?{printSources:[],printReferences:[]}:{} )};distinct.set(key,existing);
-  }else {for(const usage of node.uses)existing.uses.add(usage);existing.issues=[...new Set([...existing.issues,...node.issues])];}
+   existing={...node,rate:{...r},uses:new Set(node.uses),issues:[...node.issues],printComponents:machine?[]:null,...(machine?{parts:structuredClone(node.parts),calc:structuredClone(node.calc),printSources:[],printReferences:[]}:{} )};distinct.set(key,existing);
+  }else {for(const usage of node.uses)existing.uses.add(usage);existing.issues=[...new Set([...existing.issues,...node.issues])];if(machine){mergeMachineNotes(existing.rate,r);mergeMachineNotes(existing.parts,node.parts);mergeMachineNotes(existing.calc,node.calc);}}
   if(machine){
    if(r.source&&!existing.printSources.includes(r.source))existing.printSources.push(r.source);
    const reference=machineReference(r);if(!existing.printReferences.some(x=>JSON.stringify(x)===JSON.stringify(reference)))existing.printReferences.push(reference);

@@ -1,4 +1,4 @@
-import {printTypography,printRowHeight} from './print-typography.js';
+import {printTypography,printRowHeight,measurePrintText} from './print-typography.js';
 import {makePrintDocuments,buildPrintPages,estPrintSettings,printDocuments,printPageSvg,printPagesHtml,printVectorCss} from './est-print.js';
 import {collectEvidence} from './project-data.js';
 import {pdfFileName} from './project-labels.js';
@@ -12,7 +12,9 @@ export function setupEstPrintPreview(api){
  const chooser=document.createElement('dialog');chooser.id='estPrintChooser';chooser.setAttribute('aria-label','인쇄할 항목 선택');chooser.innerHTML=`<div class="ep-choice-head"><div><h2>인쇄할 항목 선택</h2><p>체크한 문서만 인쇄합니다. 마지막 선택은 다음 실행에도 유지됩니다.</p></div><button id="epChoiceClose" aria-label="인쇄 항목 선택 닫기">×</button></div><div class="ep-choice-tools"><button id="epChoiceAll">전체 선택</button><button id="epChoiceNone">전체 해제</button></div><div id="epChoiceList"></div><p id="epChoiceNote" role="status"></p><div class="ep-choice-footer"><button id="epChoiceCancel">취소</button><button id="epChoiceApply" class="primary">선택 항목 미리보기</button></div>`;document.body.append(chooser);
  const choose=id=>chooser.querySelector('#'+id);
  const $=id=>dialog.querySelector('#'+id);let bundle=null,pages=[],settings={},index=0,selectedKey='summary',source=null,printing=false,allPreview=true,choiceAction='select';
- const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),measure=(s,size)=>{ctx.font=`${size}px GulimChe,굴림체`;return ctx.measureText(s).width;};
+ // The workbook and PDF use these same GulimChe advances. Browser fallback
+ // font metrics must not change line breaks or fitted sizes in the preview.
+ const measure=measurePrintText;
  function message(s){$('epStatus').textContent=s;}
  function selectionCount(){const count=choose('epChoiceList').querySelectorAll('input:checked').length;choose('epChoiceNote').textContent=count?count+'개 문서 선택 · 목록 순서대로 출력합니다.':'출력할 문서를 하나 이상 선택하세요.';choose('epChoiceApply').disabled=!count;}
  function chooseDocuments(action='select'){choiceAction=action;choose('epChoiceApply').textContent=action==='print'?'선택 항목 인쇄':'선택 항목 적용';choose('epChoiceList').innerHTML=bundle.documents.map(d=>`<label><input type="checkbox" value="${d.key}" ${settings.sections.includes(d.key)&&d.rows.length?'checked':''} ${!d.rows.length?'disabled':''}><span>${esc(d.title)}</span>${!d.rows.length?'<small>자료 없음</small>':''}</label>`).join('');selectionCount();chooser.showModal();}

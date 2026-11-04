@@ -56,7 +56,9 @@ def print_pdf(payload):
                     text = op.get('text', '')
                     if not isinstance(text, str) or len(text) > 10000:
                         raise ValueError('인쇄 문장이 너무 깁니다.')
-                    size = _number(op['size'], 4, 60)
+                    # Fitted Excel cells can use sizes below 4pt. The shared
+                    # layout already resolved their font size; keep it intact.
+                    size = _number(op['size'], .1, 60)
                     scale = _number(op.get('scale', 1), .1, 2)
                     spacing = _number(op.get('spacing', 0), -1, 100)
                     align = op.get('align', 'left')

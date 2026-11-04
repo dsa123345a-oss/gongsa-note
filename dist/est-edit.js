@@ -16,7 +16,7 @@ export function editableAssembly(item,details,sourceItems=[]){
   if(!r.Name&&!r.Code&&!r.TC)continue;
   if(!r.GN&&!r.TC&&!r.Code)continue;
   if(r.ApplyNacChal||r.EscData||r.EscGN||r.Level||![0,5,6,103,104,105,58,62,68].includes(r.LinkIndex||0))throw Error('별도 산식·낙찰·소계 설정이 있어 자동 변환을 보류했습니다. 원본 근거를 확인하세요.');
-  const p={name:r.Name||r.Code,spec:r.Size||'',unit:r.Unite||'',code:r.Code||'',source:item.source,library:item.library,section:String(r.SKind??0),sumTag:String(r.SKind??0),allowNegative:[r.NU,r.GU,r.JU,r.GN].some(n=>n<0),qty:r.GN??0,qtyExpression:String(r.GN??0),labor:r.NU||0,material:r.GU||0,expense:r.JU||0,other:0,originalRecord:r._record,government:r.Gangub===2};
+  const p={name:r.Name||r.Code,spec:r.Size||'',unit:r.Unite||'',code:r.Code||'',source:item.source,library:item.library,section:String(r.SKind??0),sumTag:String(r.SKind??0),allowNegative:[r.NU,r.GU,r.JU,r.GN].some(n=>n<0),qty:r.GN??0,qtyExpression:String(r.GN??0),labor:r.NU||0,material:r.GU||0,expense:r.JU||0,other:0,originalRecord:r._record,...(typeof r.Bigo==='string'?{rowBigo:r.Bigo}:{}),government:r.Gangub===2};
   if(r.LinkIndex===68){Object.assign(p,{kind:'percent',scope:'all',basis:'total',target:'components',percent:(r.GN??0)*100,replaceRunning:true});}
   else if(r.LinkIndex===58||r.LinkIndex===62){
    const basis={1:'material',2:'labor',3:'expense',0:'total'}[r.OCheck??0],target=(r.OCheck===0&&r.SCheck===0)?'components':{1:'material',2:'labor',3:'expense'}[r.SCheck];
@@ -69,7 +69,7 @@ function editableCost(item,details,sourceItems){
    const variables=Object.fromEntries([...workloads.values()].map(v=>[v.name,v.value]));
    try{if(close(evaluateFormula(parameterized,variables),quantity))expression=parameterized;}catch{/* Keep the validated numeric expansion when other symbols remain. */}
   }
-  parts.push({name:source?.name||r.Code,spec:source?.spec||'',unit:source?.unit||'',code:r.Code,source:item.source,library:item.library,sourceComponent:target,government:r.Gangub===2||source?.government===true,section:'1',qtyExpression:expression,labor:0,material:0,expense:0,other:0,[target]:price,formulaSource:text.replace(/[\x00-\x1f]/g,''),originalRecord:r._record});
+  parts.push({name:source?.name||r.Code,spec:source?.spec||'',unit:source?.unit||'',code:r.Code,source:item.source,library:item.library,sourceComponent:target,government:r.Gangub===2||source?.government===true,section:'1',qtyExpression:expression,labor:0,material:0,expense:0,other:0,[target]:price,formulaSource:text.replace(/[\x00-\x1f]/g,''),originalRecord:r._record,...(typeof r.Bigo==='string'?{rowBigo:r.Bigo}:{})});
   expected.push({target,result});
  }
  if(!parts.length)throw Error('편집 가능한 숫자식이 없습니다. 원본 근거를 확인하세요.');
@@ -112,7 +112,7 @@ function editableMachine(item,details,sourceItems){
   if(r.CalcIndex||r.ApplyNacChal)throw Error('기계경비의 별도 계산 설정은 원본 검토가 필요합니다.');
   const target={[-1]:'labor',[-2]:'material',[-3]:'expense'}[r.Index];
   if(!target||!Number.isFinite(r.GN)||!Number.isFinite(r.TU))throw Error('기계경비 구성 유형을 확인할 수 없습니다.');
-  const p={name:r.Name||r.Code,code:r.Code||'',spec:r.Size||'',unit:r.Unite||'',source:item.source,library:item.library,section:'1',labor:0,material:0,expense:0,other:0,originalRecord:r._record,sourceComponent:target};
+  const p={name:r.Name||r.Code,code:r.Code||'',spec:r.Size||'',unit:r.Unite||'',source:item.source,library:item.library,section:'1',labor:0,material:0,expense:0,other:0,originalRecord:r._record,...(typeof r.Bigo==='string'?{rowBigo:r.Bigo}:{}),sourceComponent:target};
   if(r.Unite==='%')Object.assign(p,{kind:'percent',scope:'nearest',basis:target,target,percent:r.GN});
   else if(target==='expense'){
    // Original machine ownership coefficient is expressed in ten-millionths.

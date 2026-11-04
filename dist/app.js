@@ -9,6 +9,8 @@ import {setupExcelSelection} from './excel-selection.js';
 import {createOutputPreferences} from './output-preferences.js';
 import {startBlankSession,createCloseController,askSaveBeforeClose,createSavedProjectState} from './session-lifecycle.js';
 import {loadDefaultDatabases} from './default-databases.js';
+import {upgradeRegisteredLibraryMetadata} from './library-metadata-upgrade.js';
+import {hydrateEstProjectMetadata,restoreEstProjectLibrary} from './est-metadata.js';
 import {createResourcePricer,resourceLibrary} from './resource-pricing.js';
 import {setupResourcePricing} from './resource-pricing-ui.js';
 import {setupPriceUpdate} from './price-update-ui.js';
@@ -256,9 +258,11 @@ async function openProject(f,token=null){
 
   if(sourceLibrary){
    if(!Array.isArray(sourceLibrary.items)||!Array.isArray(sourceLibrary.details)||!Array.isArray(sourceLibrary.tables))throw Error('저장된 EST 근거 자료가 올바르지 않습니다.');
+   const restored=await upgradeRegisteredLibraryMetadata([sourceLibrary]),recovered=restoreEstProjectLibrary(restored.libraries[0],libraries);sourceLibrary=recovered.library;data={...data,estLibrary:recovered.portable};
    const next=[...libraries.filter(l=>l.id!==sourceLibrary.id),{...sourceLibrary,isMain:false,isProjectSource:true}];
    await put('libraries',next);libraries=next;
   }
+  data=hydrateEstProjectMetadata(data,libraries).project;
   await projectFiles.activate(token);
   project={...newState(),...data};projectHistory=createProjectHistory(project);group='';selectedLineId=null;$('statusFilter').value='';
   render();changed();if(!/\.(estx|ebkx)$/i.test(f.name))savedProject.markSaved(project);else savedProject.markSaved(newState());toast('공사 내역을 열었습니다.'+(data.estImport?' EST 원본은 보존되며, 저장하면 공사노트 파일로 저장됩니다.':''));
@@ -332,7 +336,14 @@ $('ratesReviewed').onchange=e=>{project.ratesReviewed=e.target.checked;renderSta
 $('saveProject').onclick=()=>saveProject();$('openProject').onclick=chooseProject;$('projectInput').onchange=e=>e.target.files[0]&&openProject(e.target.files[0]);$('exportBtn').onclick=exportFile;$('summaryExport').onclick=exportFile;$('printBtn').onclick=()=>window.print();
 $('newProject').onclick=()=>{if(project.lines.length&&!confirm('새 내역서를 만들까요? 현재 작업은 파일로 먼저 저장하세요.'))return;const mappings=project.mappings;project=newState();project.mappings=mappings;group='';render();switchView('estimate');changed();};
 $('helpBtn').onclick=()=>$('helpDialog').showModal();$('clearSaved').onclick=async()=>{if(!confirm('등록 단가 자료와 현재 작업을 초기화할까요? 공사 보관함, 원본 파일과 별도 저장 파일은 유지됩니다.'))return;libraries=[];project=newState();await put('libraries',[]);await put('project',project);render();toast('프로그램 보관 자료를 초기화했습니다.');};
-try{const l=await get('libraries');if(l!=null&&!Array.isArray(l))throw Error('단가 자료 형식을 확인하세요.');project=await startBlankSession(storage,newState(),validateProject);libraries=l||[];project.evidence=collectEvidence(project,libraries);render();savedProject.markSaved(project);loadedOK=true;projectHistory=createProjectHistory(project);}catch(e){document.querySelector('main').innerHTML='<h1>저장 자료를 열지 못했습니다.</h1><p>기존 자료를 덮어쓰지 않았습니다. 프로그램을 다시 실행해주세요.</p><p>'+esc(e.message)+'</p>';document.querySelectorAll('header button,.nav,#clearSaved').forEach(b=>b.disabled=true);throw e;}
+try{
+ const l=await get('libraries');if(l!=null&&!Array.isArray(l))throw Error('단가 자료 형식을 확인하세요.');
+ if(l?.some(lib=>!lib.estMetadataVersion&&lib.originalBytes))busy('등록 DB의 원본 비고를 복원하고 있습니다…');
+ const restored=await upgradeRegisteredLibraryMetadata(l||[]);libraries=restored.libraries;
+ if(restored.changed){try{await put('libraries',libraries);}catch{toast('원본 비고를 읽었으나 보관하지 못했습니다. 다음 실행에서 다시 확인합니다.');}}
+ project=await startBlankSession(storage,newState(),validateProject);project.evidence=collectEvidence(project,libraries);render();savedProject.markSaved(project);loadedOK=true;projectHistory=createProjectHistory(project);
+ if(restored.warnings.length)toast(restored.warnings.length+'개 DB의 일부 비고를 복원하지 못했습니다. 원래 단가 자료는 유지했습니다.');
+}catch(e){document.querySelector('main').innerHTML='<h1>저장 자료를 열지 못했습니다.</h1><p>기존 자료를 덮어쓰지 않았습니다. 프로그램을 다시 실행해주세요.</p><p>'+esc(e.message)+'</p>';document.querySelectorAll('header button,.nav,#clearSaved').forEach(b=>b.disabled=true);throw e;}finally{idle();}
 
 if(storage.runtime){
  document.body.classList.add('desktop-app');

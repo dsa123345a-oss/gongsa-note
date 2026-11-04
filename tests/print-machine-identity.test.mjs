@@ -49,3 +49,14 @@ test('동등 장비의 비목별 참조는 필요한 비목을 한 번씩 모으
  assert.equal(nodes.length,1);assert.deepEqual(nodes[0].printComponents,['labor','expense']);assert.equal(nodes[0].rate.total,11000);
  assert.equal(JSON.stringify(p),before);
 });
+
+test('같은 장비 계산의 서로 다른 원본 비고는 출력 통합 후에도 모두 보존한다',()=>{
+ const a=machine(),b=machine('10월 DB','E2','굴착기(무한궤도)');
+ a.bigo='기존 메모';b.bigo='개정 메모';a.components[0].rowBigo='25年 개정';b.components[0].rowBigo='26年 개정';
+ a.components[1].quotePages=['p.1'];b.components[1].quotePages=['p.2'];a.components[1].bigo='기존 노임';b.components[1].bigo='현재 노임';
+ const p=project([a,b]),before=JSON.stringify(p),nodes=machines(collectPrintEvidence(p));
+ assert.equal(nodes.length,1);assert.equal(nodes[0].rate.bigo,'기존 메모\n개정 메모');assert.equal(nodes[0].calc.rows[0].rowBigo,'25年 개정\n26年 개정');
+ assert.deepEqual(nodes[0].printReferences.map(r=>r.bigo),['기존 메모','개정 메모']);assert.equal(JSON.stringify(p),before);
+ b.components[0].qtyExpression='5000*FX1/10000000';b.components[0].machineOwnership.coefficient=5000;b.components[0].expense=2000000;b.components[0].priceReference.expense=2000000;Object.assign(b,calculateAssemblyDetailed(b.components,b.calculation).result);
+ assert.equal(machines(collectPrintEvidence(project([a,b]))).length,2);
+});

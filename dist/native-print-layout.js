@@ -1,5 +1,5 @@
 // One cell model for the preview, PDF and editable EST-style Excel sheets.
-import {measurePrintText} from './print-typography.js';
+import {measurePrintText,fitPrintFontSize,wrapPrintText} from './print-typography.js';
 const mm=72/25.4;
 const attr=(xml,key,def='')=>xml?.match(new RegExp('\\b'+key+'="([^"]*)"'))?.[1]??def;
 const body=(xml,tag)=>xml.match(new RegExp('<'+tag+'\\b[^>]*>([\\s\\S]*?)</'+tag+'>'))?.[1]||'';
@@ -55,9 +55,9 @@ export function layoutNativeSheet(input,styles,doc,options={}){
     const cw=merge?cols.slice(c-firstColumn,c-firstColumn+span).reduce((a,b)=>a+b,0):w;
     const ch=merge?sheet.rows.slice(index,merge.b.r+1).reduce((a,b)=>a+b.height*.967*scale,0):h;
     const value=shown(r.values[c],style.format),baseSize=style.size;
-    const fontSize=baseSize*scale,parts=value.split('\n'),natural=Math.max(...parts.map(v=>measurePrintText(v,fontSize))),fit=style.shrink&&natural>cw-4?Math.max(.1,(cw-4)/natural):1;
+    const parts=value.split('\n'),fontSize=(style.shrink?fitPrintFontSize(parts,baseSize,cw/scale-4):baseSize)*scale,padding=2*scale;
     const align=style.align==='right'||(style.align==='general'&&typeof r.values[c]==='number')?'right':style.align==='center'?'center':'left';
-    if(value)parts.forEach((text,i)=>page.ops.push({type:'text',text,x:align==='right'?x+cw-2:align==='center'?x+cw/2:x+2,y:y+(ch-parts.length*fontSize*1.15)/2+fontSize*.98+i*fontSize*1.15,size:fontSize,scale:fit,width:measurePrintText(text,fontSize)*fit,bold:style.bold,align}));
+    if(value)parts.forEach((text,i)=>page.ops.push({type:'text',text,x:align==='right'?x+cw-padding:align==='center'?x+cw/2:x+padding,y:y+(ch-parts.length*fontSize*1.15)/2+fontSize*.98+i*fontSize*1.15,size:fontSize,scale:1,width:measurePrintText(text,fontSize),bold:style.bold,align}));
     cells.push({value,span,align,lines:parts,fontSize,readable:c===2&&span>=2,keepFont:c===firstColumn&&index>=headerCount&&/공구$/.test(value),fit:style.shrink,nativeColumn:c});
    }
    x+=w;
@@ -65,8 +65,8 @@ export function layoutNativeSheet(input,styles,doc,options={}){
   page.grid.rows.push({cells,y,height:h,header:index<headerCount,headerIndex:index,sheetRow:index,bold:false});y+=h;
  }
  function start(){
-  page={width,height,orientation:landscape?'landscape':'portrait',document:doc.key,title:doc.title,ops:[],native:true,footerY:height-p.footer*72,grid:{left,right:p.right*72,cols,size:d.size??9,bottom,top,first:pages.length===0,rows:[],headerCount,cost:doc.key==='summary',native:true,projectTitle:doc.projectTitle}};pages.push(page);y=top;
-  if(doc.projectTitle)page.ops.push({type:'text',text:doc.projectTitle,x:left,y:p.header*72+9,size:9,scale:1,align:'left'});
+  page={width,height,orientation:landscape?'landscape':'portrait',document:doc.key,title:doc.title,ops:[],native:true,footerY:height-p.footer*72,footerSize:9*scale,grid:{left,right:p.right*72,cols,size:d.size??9,bottom,top,first:pages.length===0,rows:[],headerCount,cost:doc.key==='summary',native:true,projectTitle:doc.projectTitle}};pages.push(page);y=top;
+  if(doc.projectTitle){const headerSize=Math.max(1,Math.floor(fitPrintFontSize(doc.projectTitle,9,(width-left-p.right*72)/scale))),fontSize=headerSize*scale;p.headerText='&L&'+headerSize+'&"굴림체,Regular"'+String(doc.projectTitle).replaceAll('&','&&');page.ops.push({type:'text',text:doc.projectTitle,x:left,y:p.header*72+fontSize,size:fontSize,scale:1,width:measurePrintText(doc.projectTitle,fontSize),align:'left'});}
   for(let i=0;i<headerCount;i++)draw(i);
  }
  start();
@@ -101,6 +101,26 @@ export function prepareNativeSheets(native,options={}){
    r.values[2]=lines.join('\n');r.height=Math.max(r.height,(lines.length*size*1.15+5)/.967);
    const xf=xfs[r.styles[2]].replace(/<alignment\b([^>]*?)\/>/,(_,a)=>`<alignment${a.replace(/ (shrinkToFit|wrapText)="[^"]*"/g,'')} wrapText="1"/>`);
    let id=xfs.indexOf(xf);if(id<0){id=xfs.length;xfs.push(xf);}r.styles[2]=id;
+  }
+ }
+ // Resolve each shrink-to-fit cell after captions and custom font sizes have
+ // been prepared. Keep the typed values and number formats, only specialize
+ // the font style. Excel must not perform a second, renderer-specific shrink.
+ const current=xml.replace(/<fonts\b[^>]*>[\s\S]*?<\/fonts>/,`<fonts count="${fonts.length}">${fonts.join('')}</fonts>`).replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/,`<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>`),formats=nativeCellStyles(current),fitted=new Map();
+ for(const sheet of result.sheets){
+  const merges=sheet.merges.map(m=>{const[a,b]=m.split(':').map(coord);return {a,b};});
+  for(const [ri,r] of sheet.rows.entries())for(let c=0;c<r.values.length;c++){
+   const oldId=r.styles[c],style=formats[oldId];if(!style?.shrink)continue;
+   const merge=merges.find(m=>ri>=m.a.r&&ri<=m.b.r&&c>=m.a.c&&c<=m.b.c);if(merge&&(merge.a.r!==ri||merge.a.c!==c))continue;
+   const span=merge?merge.b.c-merge.a.c+1:1,width=sheet.columns.slice(c,c+span).reduce((sum,col)=>sum+col.width*5.52,0)-4;
+   let size=fitPrintFontSize(shown(r.values[c],style.format).split('\n'),style.size,width);const wrap=size<6&&sheet.name!=='원가계산서'&&ri>=sheet.header.length&&c===sheet.columns.length-1;
+   if(wrap){size=Math.min(6,style.size);const lines=wrapPrintText(r.values[c],size,width);r.values[c]=lines.join('\n');r.height=Math.max(r.height,(lines.length*size*1.15+4)/.967);}
+   const sig=oldId+':'+size+':'+wrap;
+   if(!fitted.has(sig)){
+    const old=xfs[oldId],font=fonts[Number(attr(old,'fontId',0))].replace(/<sz val="[^"]*"\/>/,`<sz val="${size}"/>`);let fi=fonts.indexOf(font);if(fi<0){fi=fonts.length;fonts.push(font);}
+    let xf=old.replace(/fontId="\d+"/,`fontId="${fi}"`).replace(/shrinkToFit="[^"]*"/g,'shrinkToFit="0"');if(wrap)xf=xf.replace(/<alignment\b([^>]*?)\/>/,(_,a)=>`<alignment${a.replace(/ wrapText="[^"]*"/g,'')} wrapText="1"/>`);let id=xfs.indexOf(xf);if(id<0){id=xfs.length;xfs.push(xf);}fitted.set(sig,id);
+   }
+   r.styles[c]=fitted.get(sig);
   }
  }
  result.styles=xml.replace(/<fonts\b[^>]*>[\s\S]*?<\/fonts>/,`<fonts count="${fonts.length}">${fonts.join('')}</fonts>`).replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/,`<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>`);

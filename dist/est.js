@@ -1,6 +1,7 @@
 // Read-only EST/DBISAM importer. Only the observed, validated field layout is supported.
 import {decodeCp949} from './cp949.js';
 import {emptyEstMessage} from './est-source-checks.js';
+import {readEstMemo} from './est-memo.js';
 const korean = {decode:decodeCp949};
 const utf8 = new TextDecoder();
 export const TABLES = {
@@ -8,7 +9,7 @@ export const TABLES = {
   CostTitleDat: '단가산출', HeadTitleDat: '일위대가', EstMainDat: '내역단가', SilJukDat: '표준시장단가'
 };
 export const TABLE_LABELS={...TABLES,EstMainDat:'내역서·안내문',CostMainDat:'단가산출 구성·산식',HeadMainDat:'일위대가 구성·산식',MachMainDat:'기계경비 구성·산식',MachGijunDat:'기계경비 적용기준',MulTitleDat:'수량산출 목록',MulMainDat:'수량산출 자료',EstiMateDat:'견적 자료',CadMainDat:'도면 자료',CadTitleDat:'도면 목록',GridHeaderInfo:'표 머리글',OtherTables:'기타 설정 자료',WongaDat:'원가계산 자료',DongWon:'동원 자료'};
-export function readTable(bytes, selectedFields=null) {
+export function readTable(bytes, selectedFields=null, blob=null) {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if(bytes.length < 512) throw Error('데이터 파일의 헤더가 짧습니다.');
   const count=v.getUint16(47,true), size=v.getUint16(45,true), declared=v.getUint32(41,true);
@@ -21,11 +22,11 @@ export function readTable(bytes, selectedFields=null) {
     const p=512+i*768, len=bytes[p+2], type=v.getUint16(p+164,true), width=v.getUint16(p+166,true), offset=v.getUint16(p+172,true)+1;
     if(len>162 || v.getUint16(p,true)!==i+1) throw Error('필드 정의를 읽을 수 없습니다.');
     const name=utf8.decode(bytes.subarray(p+3,p+3+len));
-    const length=type===1?width+1:[7,5383,11].includes(type)?8:[6,7430,2].includes(type)?4:type===5?2:type===4?1:0;
+    const length=type===1?width+1:[7,5383,11,5635].includes(type)?8:[6,7430,2].includes(type)?4:type===5?2:type===4?1:0;
     if(offset<1 || offset+length>size) throw Error('필드 위치가 데이터 범위를 벗어났습니다.');
     fields.push({name,type,width,offset,length});
   }
-  const rows=[];
+  const rows=[],memoWarnings=[];
   for(let i=0;i<physical;i++) {
     const p=start+i*size;
     if(bytes[p]!==0)continue;
@@ -40,11 +41,12 @@ export function readTable(bytes, selectedFields=null) {
       else if(f.type===7430)row[f.name]=v.getUint32(o,true);
       else if(f.type===5)row[f.name]=v.getInt16(o,true);
       else if(f.type===4)row[f.name]=!!bytes[o];
+      else if(f.type===5635){try{row[f.name]=readEstMemo(blob,v.getUint32(o,true),v.getUint32(o+4,true));}catch(e){memoWarnings.push({record:i,field:f.name,reason:e.message});}}
     }
     rows.push(row);
   }
   if(rows.length!==declared)throw Error(`행 수 검증 실패: 헤더 ${declared}, 실제 ${rows.length}`);
-  return {rows,fields,declared,rowSize:size};
+  return {rows,fields,declared,rowSize:size,...(memoWarnings.length?{memoWarnings}:{})};
 }
 export async function unzip(input, inflate) {
   const bytes=input instanceof Uint8Array?input:new Uint8Array(input);
@@ -81,7 +83,7 @@ export async function importEst(input, filename, inflate) {
   const zip=await unzip(input,inflate), id=crypto.randomUUID(), items=[], stats=[], details=new Map(), projectRows=[],chargeHints=[],tables=[],archiveFiles=zip.names;
   const cache=new Map();
   for(const name of zip.names.filter(n=>/\.dat$/i.test(n))){
-    try{const t=readTable(await zip.read(name));for(const r of t.rows)for(const k of Object.keys(r))if(r[k]===null)delete r[k];cache.set(name.toLowerCase(),t);tables.push({name,label:TABLE_LABELS[name.replace(/\.dat$/i,'')]||name,fields:t.fields,rows:t.rows});}
+    try{const blobName=zip.names.find(n=>n.toLowerCase()===name.replace(/\.dat$/i,'.blb').toLowerCase());const t=readTable(await zip.read(name),null,blobName?await zip.read(blobName):null);for(const r of t.rows)for(const k of Object.keys(r))if(r[k]===null)delete r[k];cache.set(name.toLowerCase(),t);tables.push({name,label:TABLE_LABELS[name.replace(/\.dat$/i,'')]||name,fields:t.fields,rows:t.rows,...(t.memoWarnings?{memoWarnings:t.memoWarnings}:{})});}
     catch(e){tables.push({name,label:name,fields:[],rows:[],error:e.message});}
   }
   for(const [table,category] of Object.entries(TABLES)) {
@@ -101,6 +103,8 @@ export async function importEst(input, filename, inflate) {
       // Preserve the imported total and any unclassified remainder explicitly.
       const other=Number((total-labor-material-expense).toFixed(8));
       const item={id:`${id}:${table}:${r._record}`,library:id,category,table,record:r._record,code:r.Code,name:r.Name.trim(),spec:(r.Size||'').trim(),unit:(r.Unite||'').trim(),total,labor,material,expense,other,group,source:filename,prices:Array.from({length:6},(_,i)=>r['Cost'+(i+1)]??null),quotePages:Array.from({length:6},(_,i)=>r['Page'+(i+1)]??''),remark:r.Remark??'',sourceQuantity:project?r.GN:null,sourceAmount:project?r.TC:null,government:r.Gangub===2};
+      if(typeof r.Bigo==='string')item.bigo=r.Bigo;
+      else if(!t.memoWarnings?.some(w=>w.record===r._record&&w.field==='Bigo'))item.bigo='';
       items.push(item);if(project)projectRows.push(item);
     }
   }
@@ -115,7 +119,7 @@ export async function importEst(input, filename, inflate) {
   const ini=info?korean.decode(info):'';
   const version=/DataVersion=(.*)/.exec(ini)?.[1]?.trim()||'미상';
   const sourceLabels=Array.from({length:6},(_,i)=>new RegExp('TitleName'+(i+1)+'=(.*)').exec(ini)?.[1]?.trim()||`단가 ${i+1}`);
-  return {id,name:filename,version,items,stats,details:[...details],projectRows,chargeHints,sourceLabels,tables,archiveFiles,originalBytes:input instanceof Uint8Array?input:new Uint8Array(input),importedAt:new Date().toISOString()};
+  return {id,name:filename,version,items,stats,details:[...details],projectRows,chargeHints,sourceLabels,tables,archiveFiles,originalBytes:input instanceof Uint8Array?input:new Uint8Array(input),importedAt:new Date().toISOString(),estMetadataVersion:1};
 }
 let crcTable;
 export function crc32(bytes){if(!crcTable)crcTable=Array.from({length:256},(_,i)=>{for(let k=0;k<8;k++)i=i&1?0xedb88320^(i>>>1):i>>>1;return i>>>0;});let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0;}

@@ -6,6 +6,7 @@ import {validateAdjustment} from './line-adjustments.js';
 import {normalizeSectionTitles} from './project-labels.js';
 import {reserveWorkConnectionJoints} from './work-connection-joints.js';
 import {validateSupplyFees} from './supply-fees.js';
+import {withEstMetadata,copyMissingEstMetadata} from './est-metadata.js';
 
 export function validateProject(data){
  if(!data||data.schema!==1||!Array.isArray(data.lines)||!Array.isArray(data.charges)||data.lines.length>10000||data.charges.length>300)throw Error('지원하는 공사노트 작업 파일이 아닙니다.');
@@ -55,7 +56,7 @@ export function resolveRateLibrary(rate,libraries){
  return libraries.find(l=>l.name===rate.source&&l.items?.some(i=>keys.every(k=>i[k]===rate[k])));
 }
 export function collectEvidence(project,libraries){
- const seen=new Set(),evidence=[];
+ const seen=new Set(),evidence=[],metadataIndexes=new WeakMap();
  const identities=new WeakMap(),identity=rate=>{if(!identities.has(rate))identities.set(rate,rateIdentity(rate));return identities.get(rate);};
  const savedByKey=new Map();for(const entry of project.evidence||[]){const key=identity(entry.rate);if(!savedByKey.has(key))savedByKey.set(key,entry);}
  const detailIndexes=new Map();
@@ -66,10 +67,13 @@ export function collectEvidence(project,libraries){
  const prefixOf=rate=>rate.machineInputs||rate.table==='MachTitleDat'?'MachMainDat':({일위대가:'HeadMainDat',단가산출:'CostMainDat',장비:'MachMainDat'}[rate.category]||({U:'HeadMainDat',D:'CostMainDat',E:'MachMainDat'}[rate.code?.[0]]));
  function visit(rate,parentLib=null,depth=0,top=false){
   if(depth>=30)return;
+  const savedRate=savedByKey.get(identity(rate))?.rate;
+  rate=copyMissingEstMetadata(withEstMetadata(rate,libraries,metadataIndexes),savedRate);
+  for(const k of ['category','table'])if(rate[k]==null&&savedRate?.[k]!=null)rate={...rate,[k]:savedRate[k]};
   const key=identity(rate),walkKey=JSON.stringify([key,rate.library,rate.sourceComponent]);if(visited.has(walkKey))return;visited.add(walkKey);
   if(visited.size>10000)throw Error('단가 근거가 너무 많습니다. 공사를 나누어 저장하세요.');
   const lib=resolveRateLibrary(rate,libraries)||(rate.resourcePricing?.original?resolveRateLibrary(rate.resourcePricing.original,libraries):null)||parentLib,saved=savedByKey.get(key),prefix=prefixOf(rate),rows=saved?.rows?.length?saved.rows:detail(lib,prefix+':'+rate.code);
-  if(!seen.has(key)&&(top||rows.length)){seen.add(key);evidence.push({rate,rows});}
+  if(!seen.has(key)&&(top||rows.length||['bigo','remark','quotePages'].some(k=>Object.hasOwn(rate,k)))){seen.add(key);evidence.push({rate,rows});}
   // Save only dependencies actually used by this assembly. Resource price
   // snapshots already live in components; copying the entire DB would bloat
   // every save and could replace a historical source with a new monthly DB.
@@ -82,7 +86,7 @@ export function collectEvidence(project,libraries){
    if(rate.sourceComponent&&calc?.rows[i]?.amount&&!calc.rows[i].amount[rate.sourceComponent])continue;
    const matches=candidates(lib,part.code),original=matches.find(r=>same(r,part))||(matches.length===1&&norm(part.name)==='주연료'?matches[0]:null);
    const child={...(original?{category:original.category,table:original.table}:{}),...part,source:part.priceReference?.source||part.source||rate.source,library:part.library||rate.library,total:costKeys.reduce((n,k)=>n+Number(part[k]||0),0)};
-   if(!child.components&&!prefixOf(child))continue;
+   if(!child.components&&!prefixOf(child)&&!['자재','노임'].includes(child.category)&&!/^L|^M/.test(child.code||''))continue;
    visit(child,lib,depth+1);
   }
  }

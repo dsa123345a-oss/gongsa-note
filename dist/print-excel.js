@@ -40,10 +40,15 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
     append(titleTop);let r=append(frame.height);merge(r,0,r,n-1);
     append(top-titleTop-frame.height-14);
    }else append(top-14);
-   let r=append(14,[grid.projectTitle],[style({size:10,shrink:true})]);merge(r,0,r,n-1);
+   let r=append(14,[grid.projectTitle],[style({size:grid.projectFontSize||10})]);merge(r,0,r,n-1);
    const positions=[];const occupied=new Set();
    const gridRows=[...grid.rows];const last=gridRows.at(-1),end=last?last.y+last.height:top;
    for(let y=end;y<grid.bottom-.01;){const height=Math.min(400,grid.bottom-y);gridRows.push({y,height,cells:Array.from({length:n},()=>({value:''})),filler:true});y+=height;}
+   // Excel cannot represent a sub-pixel row. Keeping a tiny trailing filler
+   // would force it to .75pt and can spill an otherwise finished page into a
+   // blank border-only page after a wrapped remark. Extend the previous row
+   // instead; its bottom border still lands on the shared table boundary.
+   if(gridRows.length>1&&gridRows.at(-1).filler&&gridRows.at(-1).height<.75){const tail=gridRows.pop(),prior=gridRows.at(-1);gridRows[gridRows.length-1]={...prior,height:prior.height+tail.height};}
    for(const [ri,source] of gridRows.entries()){
     const out=rows.length+1;positions.push({y:source.y,end:source.y+source.height,row:out});
     const values=Array(n).fill(''),ids=Array(n).fill(0);let c=0;
@@ -62,7 +67,7 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
      // The preview already fits/wraps the cell and determines its row height.
      // Recalculating a multiline font here made the same header/body smaller
      // only in Excel (e.g. the two-line 노무비 header was 10.14 instead of 11.5).
-     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(source.header?grid.size+1:grid.size),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!cell.fit&&!numeric&&!percent,shrink:!cell.keepFont&&!cell.readable&&(!multiline||!!cell.fit||numeric||percent),numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
+     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(source.header?grid.size+1:grid.size),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!numeric&&!percent,shrink:false,numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
      if(rowspan===2){
       // The next header row supplies the bottom edge of a vertically merged cell.
       // Its blank value is retained and no overlapping merge is generated.

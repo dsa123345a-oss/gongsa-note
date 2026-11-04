@@ -91,7 +91,7 @@ export function createResourcePricer(project,libraries,options={}){
     // Preserve the exact source snapshot even when an unmatched resource keeps
     // its original price. Reopening a saved project must not need a current DB
     // to reconstruct the survey pages or fixed-text remark for that price.
-    for(const k of ['prices','quotePages','remark'])if(Object.hasOwn(result.rate,k))part[k]=structuredClone(result.rate[k]);
+    for(const k of ['prices','quotePages','remark','bigo'])if(Object.hasOwn(result.rate,k))part[k]=structuredClone(result.rate[k]);
     if(result.rate.components){part.components=result.rate.components;part.calculation=result.rate.calculation;}
     if(result.rate.priceReference)part.priceReference=result.rate.priceReference;
    }catch(e){issues.push({key:identity(child),resource:child,reason:e.message});}

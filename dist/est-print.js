@@ -1,7 +1,7 @@
 const displayNumber = new Intl.NumberFormat('ko-KR',{maximumFractionDigits:6});
 import {nativeEstimateSheets} from './est-excel-native.js';
 import {layoutNativeSheet,prepareNativeSheets} from './native-print-layout.js';
-import {printTypography,measurePrintText,spacedTextWidth,printHeaderWidths,printRowHeight} from './print-typography.js';
+import {printTypography,measurePrintText,spacedTextWidth,fitPrintFontSize,wrapPrintText,printRowHeight} from './print-typography.js';
 import {sectionCaption} from './project-labels.js';
 import {separateSectionLabel} from './cost-scopes.js';
 import {amount,appliedRate,totals,synchronizeLinkedCosts} from './calc.js';
@@ -14,6 +14,7 @@ import {machineBasisRows} from './machine-basis-print.js';
 import {machineInputPrintRows} from './machine-input-print.js';
 import {priceBasisLabel} from './price-basis-label.js';
 import {estFormulaDisplay} from './est-formula-display.js';
+import {estRemarkText} from './est-memo.js';
 export const printDocuments={summary:'원가계산서',groups:'내역서총괄표',estimate:'내역서',unitSummary:'일위대가총괄표',units:'일위대가',formulaSummary:'단가산출총괄표',formulas:'단가산출',machineBasis:'기계경비적용기준',machineSummary:'기계경비총괄표',machines:'기계경비산출근거',materials:'자재단가',labor:'노임단가'};
 export const defaultPrintDocuments=['summary','groups','estimate','units','formulas','machines','materials','labor'];
 const mm=72/25.4;
@@ -21,6 +22,11 @@ const num=v=>v==null?'':displayNumber.format(Number(v));
 const nz=v=>v?num(v):'';
 const text=v=>String(v??'').replace(/[\u0000-\u0008\u000b-\u001f]/g,'');
 const cell=(value,align='left',span=1)=>({value:text(value),align,span});
+const itemRemark=(value={},raw=null)=>estRemarkText({...value,rowBigo:undefined},raw);
+// A component's row note belongs to that particular calculation. It must not
+// become the occupation/material note in a separate resource table, nor should
+// the resource's own note replace an empty original calculation-row note.
+const componentRemark=(value={})=>Object.hasOwn(value,'rowBigo')?estRemarkText({bigo:value.rowBigo}):value.originalRecord!=null?estRemarkText({Bigo:value.Bigo,Remark:value.Remark}):estRemarkText(value);
 const money=v=>({...cell(nz(v),'right'),fit:true});
 const row=(cells,extra={})=>({cells:cells.map(c=>c&&typeof c==='object'?c:cell(c)),...extra});
 const costs=r=>[r.total,r.labor,r.material,(r.expense||0)+(r.other||0)];
@@ -74,12 +80,12 @@ export function makePrintDocuments(project,libraries=[]){
  }
  add('estimate',detailRows,detailWidths,detailHead,{singleLine:true});
  const sourceOrder=n=>{const lib=libraries.find(l=>l.id===n.rate.library||l.name===n.rate.source);return lib?.items.find(i=>i.code===n.rate.code&&i.table!=='EstMainDat')?.record??n.rate.record??999999;};const nodes=category=>graph.nodes.filter(n=>evidenceCategory(n)===category).sort((a,b)=>sourceOrder(a)-sourceOrder(b));
- const summaryNodes=(key,category)=>add(key,nodes(category).map((n,i)=>row([String(i+1),n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).map(money),''])),summaryWidths,[summaryHead]);
+ const summaryNodes=(key,category)=>add(key,nodes(category).map((n,i)=>row([String(i+1),n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).map(money),itemRemark(n.rate)])),summaryWidths,[summaryHead]);
  summaryNodes('unitSummary','일위대가');summaryNodes('formulaSummary','단가산출');summaryNodes('machineSummary','장비');
  const rawCells=r=>[r.NC,r.GC,(r.JC||0)+(r.SC||0),r.TC];
  const componentRows=n=>n.verified&&n.calc?n.calc.rows.map(p=>({name:p.unit==='인'?String(p.name||p.kind).replace(/\s/g,''):p.name||p.kind,spec:p.spec||'',qty:p.kind?p.percent??p.qty:p.qty,unit:p.unit||(p.kind==='percent'?'%':''),units:costs(p),amounts:costs(p.amount),formula:p.qtyExpression??p.qty,kind:p.kind,basis:p.basis,raw:p})):n.raw.filter(r=>!r.TitleCode&&(r.Name||r.LineData||r.Code)).map(r=>({name:text(r.Name||r.LineData||r.Code),spec:r.Size||'',qty:r.GN,unit:r.Unite||'',units:[r.TU,r.NU,r.GU,r.JU],amounts:[r.TC,r.NC,r.GC,(r.JC||0)+(r.SC||0)],formula:text(r.LineData||''),raw:r}));
  const unitRows=[];
- nodes('일위대가').forEach((n,i)=>{unitRows.push(row(['제'+(i+1)+'호표',n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).flatMap(v=>['',money(v)]),''],{bold:true,itemStart:true}));const parts=componentRows(n);for(const p of parts)unitRows.push(row(['',p.name,p.spec,cell(num(p.qty),'right'),cell(p.unit,'center'),...p.units.flatMap((v,i)=>[money(v),money(p.amounts[i])]),'']));if(!parts.length)unitRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',14)]));if(n.issues?.length)unitRows.push(row([{...cell([...new Set(n.issues)].join(' / '),'left',14),readable:true,fontSize:9}],{note:true}));unitRows.push(row(Array(14).fill('')));});
+ nodes('일위대가').forEach((n,i)=>{unitRows.push(row(['제'+(i+1)+'호표',n.rate.name,n.rate.spec||'','',n.rate.unit,...costs(n.rate).flatMap(v=>['',money(v)]),itemRemark(n.rate)],{bold:true,itemStart:true}));const parts=componentRows(n);for(const p of parts)unitRows.push(row(['',p.name,p.spec,cell(num(p.qty),'right'),cell(p.unit,'center'),...p.units.flatMap((v,i)=>[money(v),money(p.amounts[i])]),componentRemark(p.raw)]));if(!parts.length)unitRows.push(row([cell('구성 근거 없음 · 현재 적용 단가','left',14)]));if(n.issues?.length)unitRows.push(row([{...cell([...new Set(n.issues)].join(' / '),'left',14),readable:true,fontSize:9}],{note:true}));unitRows.push(row(Array(14).fill('')));});
  const unitHead=detailHead.map(r=>r.map(c=>({...c})));unitHead[0][0]=cell('호 표','center');
  add('units',unitRows,detailWidths,unitHead);
  const formulaRows=[];
@@ -92,8 +98,8 @@ export function makePrintDocuments(project,libraries=[]){
  });
  add('formulas',formulaRows,[67,9,8,8,8],[['산 출 근 거','합 계','노무비','재료비','경 비']],{verticalOnly:true});
  const machineRows=[];
- nodes('장비').forEach((n,i)=>{machineRows.push(row([`${i+1}. ${n.rate.name}`,n.rate.spec||'','',...costs(n.rate).map(money),''],{bold:true,itemStart:true}));
-  for(const p of componentRows(n).map(p=>{if(!n.printComponents)return p;const take=(raw)=>{const kept=Object.fromEntries(['labor','material','expense','other'].map(k=>[k,n.printComponents.includes(k)?Number(raw?.[k]||0):0]));kept.total=Object.values(kept).reduce((x,y)=>x+y,0);return costs(kept);};return {...p,units:take(p.raw),amounts:take(p.raw.amount)};}).filter(p=>!n.printComponents||p.amounts.some(Boolean))){let formula=p.formula?String(p.formula):String(p.qty??'');if(n.verified&&n.calc){formula=formula.replace(/\b[A-Za-z_][A-Za-z_0-9]*\b/g,k=>{const v=n.calc.variables.find(v=>v.name===k);return v?'('+v.expression+')':k;});formula=p.kind==='percent'?`${num(p.raw.basisValue)} × ${num(p.qty)}%`:p.raw.machineOwnership?`${num(p.raw.expense)} × (${formula})`:`${num(p.units[0])} × (${formula})`;}else if(p.raw?.TU!=null)formula=`${num(p.raw.TU)} × ${num(p.raw.GN)}`;machineRows.push(row([p.name,p.spec,formula,...p.amounts.map(money),'']));}
+ nodes('장비').forEach((n,i)=>{machineRows.push(row([`${i+1}. ${n.rate.name}`,n.rate.spec||'','',...costs(n.rate).map(money),itemRemark(n.rate)],{bold:true,itemStart:true}));
+  for(const p of componentRows(n).map(p=>{if(!n.printComponents)return p;const take=(raw)=>{const kept=Object.fromEntries(['labor','material','expense','other'].map(k=>[k,n.printComponents.includes(k)?Number(raw?.[k]||0):0]));kept.total=Object.values(kept).reduce((x,y)=>x+y,0);return costs(kept);};return {...p,units:take(p.raw),amounts:take(p.raw.amount)};}).filter(p=>!n.printComponents||p.amounts.some(Boolean))){let formula=p.formula?String(p.formula):String(p.qty??'');if(n.verified&&n.calc){formula=formula.replace(/\b[A-Za-z_][A-Za-z_0-9]*\b/g,k=>{const v=n.calc.variables.find(v=>v.name===k);return v?'('+v.expression+')':k;});formula=p.kind==='percent'?`${num(p.raw.basisValue)} × ${num(p.qty)}%`:p.raw.machineOwnership?`${num(p.raw.expense)} × (${formula})`:`${num(p.units[0])} × (${formula})`;}else if(p.raw?.TU!=null)formula=`${num(p.raw.TU)} × ${num(p.raw.GN)}`;machineRows.push(row([p.name,p.spec,formula,...p.amounts.map(money),componentRemark(p.raw)]));}
   if(n.machine){
    if(n.verified){for(const p of machineInputPrintRows(n))machineRows.push(row([p.name,'',p.formula,...costs(p.amount).map(money),'']));machineRows.push(row([cell('각 항목 원 미만 절사','left',8)],{note:true}));}
    else machineRows.push(row([cell('입력 산식과 현재 단가가 다릅니다. 산출근거를 확인하세요.','left',8)],{note:true}));
@@ -104,8 +110,8 @@ export function makePrintDocuments(project,libraries=[]){
  const basisRows=machineBasisRows(nodes('장비')).map(values=>row(values.map(v=>({...cell(v),readable:true,fontSize:9}))));
  add('machineBasis',basisRows,[12,24,26,13,25],[['구 분','적 용 대 상','산 식','적 용 값','근 거']]);
  const materialHeads=[[...['No','품 명','규 격','단위'].map(x=>cell(x,'center')),...['가격정보','물가자료','유통물가','물가정보','거래가격','견적가1'].map(x=>cell(x,'center',2)),cell('적용단가','center'),cell('비 고','center')],['','','','',...Array.from({length:6},()=>['단 가','page']).flat(),'',''].map(x=>cell(x,'center'))];
- add('materials',nodes('자재').map((n,i)=>{const r=n.rate,raw=materialSource(r,libraries);return row([i+1,r.name,r.spec||'',cell(r.unit,'center'),...Array.from({length:6},(_,j)=>[money(r.prices?.[j]??raw?.['Cost'+(j+1)]),r.quotePages?.[j]??raw?.['Page'+(j+1)]??'']).flat(),money(r.total),[r.remark??raw?.Remark,n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join(' · ')]);}),[3,14,12,3,...Array(12).fill(4.6),6,6.8],materialHeads);
- add('labor',nodes('노임').map((n,i)=>row([i+1,n.rate.name,n.rate.spec||'',cell(n.rate.unit,'center'),money(n.rate.total),{...cell([priceBasisLabel(n.rate,'노임'),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join('\n')),readable:true,fontSize:9}])),[5,27,20,8,15,25],[['No','직 종','규 격','단위','적용단가','적용 기준']]);
+ add('materials',nodes('자재').map((n,i)=>{const r=n.rate,raw=materialSource(r,libraries);return row([i+1,r.name,r.spec||'',cell(r.unit,'center'),...Array.from({length:6},(_,j)=>[money(r.prices?.[j]??raw?.['Cost'+(j+1)]),r.quotePages?.[j]??raw?.['Page'+(j+1)]??'']).flat(),money(r.total),[itemRemark(r,raw),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join(' · ')]);}),[3,14,12,3,...Array(12).fill(4.6),6,6.8],materialHeads);
+ add('labor',nodes('노임').map((n,i)=>row([i+1,n.rate.name,n.rate.spec||'',cell(n.rate.unit,'center'),money(n.rate.total),{...cell([priceBasisLabel(n.rate,'노임'),itemRemark(n.rate),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join('\n')),readable:true,fontSize:9}])),[5,27,20,8,15,25],[['No','직 종','규 격','단위','적용단가','적용 기준']]);
  const bundle={documents:Object.keys(printDocuments).map(k=>result[k]),warnings:[...(t.missing?[`단가·수량 미확정 ${t.missing}건 · 검토용 출력`]:[]),...graph.warnings],totals:t};bundle.native=nativeEstimateSheets(project,bundle);return bundle;
 }
 export function estPrintSettings(value={}){
@@ -123,18 +129,27 @@ export function layoutPrintDocument(doc,options={},measure=measurePrintText){
  // Original EST fractions use three aligned, fixed-pitch lines. Fit the entire
  // block at one font size, and expose that same size to the Excel writer.
  const blockSizes=new Map();
- const spaceSize=(c,w)=>Math.min(c.fontSize||size,(w-5)/Math.max(1,measure(c.value||'',1)));
+ const spaceSize=(c,w)=>fitPrintFontSize(c.value||'',c.fontSize||size,w-5,measure);
  for(const r of doc.rows){let col=0;for(const c of r.cells){const w=cols.slice(col,col+(c.span||1)).reduce((a,b)=>a+b,0);col+=c.span||1;if(c.preserveSpace&&r.formulaBlock)blockSizes.set(r.formulaBlock,Math.min(blockSizes.get(r.formulaBlock)??size,spaceSize(c,w)));}}
  const preparedRows=doc.rows.map(r=>{let col=0;return {...r,cells:r.cells.map(c=>{const w=cols.slice(col,col+(c.span||1)).reduce((a,b)=>a+b,0);col+=c.span||1;return c.preserveSpace?{...c,keepFont:true,fontSize:r.formulaBlock?blockSizes.get(r.formulaBlock):spaceSize(c,w)}:c;})};});
  const op=o=>page.ops.push(o),line=(x,y,x2,y2,weight=.35)=>op({type:'line',x,y,x2,y2,weight});
  const write=(value,x,y,{size:fontSize=size,align='left',bold=false,scale=fontScale,spacing=letterSpacing}={})=>{if(value!==''&&value!=null)op({type:'text',text:String(value),x,y,size:fontSize,align,bold,scale,spacing,width:spacedTextWidth(value,fontSize,spacing,measure)*scale});};
- function cellLines(c,w,fontSize){const s=c.value||'';fontSize=c.fontSize||fontSize;if(c.keepFont)return [s];if(!c.readable&&(c.fit||doc.singleLine))return [s.replace(/\s*\n\s*/g,' ')];const scale=c.readable?1:fontScale,max=w-(c.readable?18:5);const parts=[];for(const paragraph of s.split('\n')){let current='';for(const ch of paragraph){if(current&&extent(current+ch,fontSize)*scale>max){parts.push(current);current=ch;}else current+=ch;}parts.push(current);}return parts;}
+ function cellLines(c,w,fontSize){const s=c.value||'';fontSize=c.fontSize||fontSize;if(c.keepFont)return s.split('\n');if(!c.readable&&(c.fit||doc.singleLine))return [s.replace(/\s*\n\s*/g,' ')];const scale=c.readable?1:fontScale,max=w-(c.readable?18:5);const parts=[];for(const paragraph of s.split('\n')){let current='';for(const ch of paragraph){if(current&&extent(current+ch,fontSize)*scale>max){parts.push(current);current=ch;}else current+=ch;}parts.push(current);}return parts;}
+ let remarkColumn=-1,headerColumn=0;for(const c of doc.headers[0]||[]){if(String(c.value||'').replace(/\s/g,'')==='비고')remarkColumn=headerColumn;headerColumn+=c.span||1;}
+ function fittedCell(c,w,header=false,column=-1){const lines=cellLines(c,w,header?size+1:size),fit=!c.keepFont&&!c.readable&&(c.fit||!!doc.singleLine),nominal=c.fontSize||(header?size+1:size),fontSize=fit?fitPrintFontSize(lines,nominal,w-5,measure):nominal;
+  // Remarks can contain source notes, not just an EST reference code. Keep
+  // names/specifications on one line, but do not turn long notes into dots.
+  if(!header&&column===remarkColumn&&(c.span||1)===1&&fontSize<6)return {...c,lines:wrapPrintText(c.value,Math.min(6,nominal),w-5,measure),fit:false,fontSize:Math.min(6,nominal)};
+  return {...c,lines,fit,fontSize};
+ }
  function drawRow(r,h,{header=false,headerIndex=0}={}){
   let gridColumn=0;
-  page.grid.rows.push({...r,y,height:h,header,headerIndex,cells:r.cells.map(c=>{const width=cols.slice(gridColumn,gridColumn+(c.span||1)).reduce((a,b)=>a+b,0);gridColumn+=c.span||1;return {...c,fit:!c.keepFont&&!c.readable&&(c.fit||!!doc.singleLine),lines:cellLines(c,width,header?size+1:size)};})});
-  if(doc.cost&&!header&&r.group){const last=groupSpans.at(-1);if(last?.group===r.group)last.end=y+h;else groupSpans.push({group:r.group,start:y,end:y+h});}let col=0;for(const c of r.cells){const span=c.span||1,w=cols.slice(col,col+span).reduce((a,b)=>a+b,0),x=boundaries[col];if(x===undefined)break;
-   if(header&&!c.value){col+=span;continue;}const ch=header&&doc.headers.length===2&&span===1&&headerIndex===0?h*2:h;const parts=cellLines(c,w,header?size+1:size);const fontSize=c.fontSize||(header?size+1:size),leading=fontSize*(c.readable?1.3:doc.key==='formulas'?1.05:1.15),top=y+(ch-parts.length*leading)/2+fontSize;
-   parts.forEach((str,j)=>{if(c.distribute&&str.length>1&&str.length<=13){const inset=doc.cost&&span>=3?cols[0]+cols[1]+4:Math.min(10,w*.08),available=Math.min(w-2*inset,Math.max(fontSize*6.4,(str.length-1)*fontSize*fontScale*1.05));[...str].forEach((ch,k)=>write(ch,x+inset+k*available/(str.length-1),top+j*leading,{size:fontSize,align:'center',bold:!!r.bold,scale:fontScale}));return;}if(header){const label=str.replace(/\s/g,''),target=printHeaderWidths[label];if(target&&label.length>1){const width=Math.min(w-5,target),spacing=Math.max(-1,(width/fontScale-measure(label,fontSize))/(label.length-1));write(label,x+w/2,top+j*leading,{size:fontSize,align:'center',scale:fontScale,spacing});return;}}const align=header?'center':c.align||'left';write(str,align==='right'?x+w-2:align==='center'?x+w/2:x+2,top+j*leading,{size:fontSize,align,bold:!!r.bold,scale:c.keepFont?1:c.readable?1:c.fit||doc.singleLine?Math.min(fontScale,(w-5)/Math.max(1,extent(str,fontSize))):fontScale});});
+  const rendered={...r,y,height:h,header,headerIndex,cells:r.cells.map(c=>{const column=gridColumn,width=cols.slice(column,column+(c.span||1)).reduce((a,b)=>a+b,0);gridColumn+=c.span||1;return fittedCell(c,width,header,column);})};page.grid.rows.push(rendered);
+  if(doc.cost&&!header&&r.group){const last=groupSpans.at(-1);if(last?.group===r.group)last.end=y+h;else groupSpans.push({group:r.group,start:y,end:y+h});}let col=0;for(const c of rendered.cells){const span=c.span||1,w=cols.slice(col,col+span).reduce((a,b)=>a+b,0),x=boundaries[col];if(x===undefined)break;
+   if(header&&!c.value){col+=span;continue;}const ch=header&&doc.headers.length===2&&span===1&&headerIndex===0?h*2:h;const parts=c.lines,fontSize=c.fontSize,leading=fontSize*(c.readable?1.3:doc.key==='formulas'?1.05:1.15),top=y+(ch-parts.length*leading)/2+fontSize;
+   // Literal spaces in the shared header value also survive editable Excel.
+   // Arbitrary character spacing here used to make the preview alone wider.
+   parts.forEach((str,j)=>{if(c.distribute&&str.length>1&&str.length<=13){const inset=doc.cost&&span>=3?cols[0]+cols[1]+4:Math.min(10,w*.08),available=Math.min(w-2*inset,Math.max(fontSize*6.4,(str.length-1)*fontSize*fontScale*1.05));[...str].forEach((ch,k)=>write(ch,x+inset+k*available/(str.length-1),top+j*leading,{size:fontSize,align:'center',bold:!!r.bold,scale:fontScale}));return;}const align=header?'center':c.align||'left';write(str,align==='right'?x+w-2:align==='center'?x+w/2:x+2,top+j*leading,{size:fontSize,align,bold:!!r.bold,scale:1});});
    if(col)line(x,y,x,y+ch);if(header)line(x,y+ch,x+w,y+ch,.35);col+=span;
   }
   if(!header&&(!doc.verticalOnly||r.subtotal||(r.itemStart&&doc.key!=='formulas')||doc.cost&&!r.group))line(left,y+h,left+tableWidth,y+h,header||r.subtotal?.6:.35);y+=h;rowsOnPage++;
@@ -142,7 +157,7 @@ export function layoutPrintDocument(doc,options={},measure=measurePrintText){
  function start(){page={width,height,orientation:landscape?'landscape':'portrait',document:doc.key,title:doc.title,ops:[],grid:{left,right,cols,size,bottom,rows:[],cost:!!doc.cost,verticalOnly:!!doc.verticalOnly}};pages.push(page);rowsOnPage=0;groupSpans=[];
   const first=pages.length===1;const titleY=(landscape?24:31)*mm,titleSize=24,titleText=doc.title.length===3?[...doc.title].join('  '):doc.title,titleWidth=Math.max(144,measure(titleText,titleSize)+18),titleCenter=left+tableWidth/2,titleX=titleCenter-titleWidth/2;
   if(first){op({type:'rect',x:titleX+2,y:titleY-titleSize-3+2,width:titleWidth,height:titleSize+5,fill:.7,weight:0});op({type:'rect',x:titleX,y:titleY-titleSize-3,width:titleWidth,height:titleSize+5,fill:1,weight:.6});write(titleText,titleCenter,titleY,{size:titleSize,align:'center',bold:true,scale:1,spacing:doc.title.length===3?0:1.2});}
-  const gridTop=(first?(landscape?30:37):(landscape?18:25))*mm;write(doc.projectTitle,left,gridTop-2*mm,{size:10,scale:.8});y=gridTop;startY=y;
+  const gridTop=(first?(landscape?30:37):(landscape?18:25))*mm,projectFontSize=fitPrintFontSize(doc.projectTitle,10,tableWidth-4,measure);write(doc.projectTitle,left,gridTop-2*mm,{size:projectFontSize,scale:1});y=gridTop;startY=y;page.grid.projectFontSize=projectFontSize;
   page.grid.top=gridTop;page.grid.first=first;page.grid.projectTitle=doc.projectTitle;page.grid.headerCount=doc.headers.length;
   for(const [headerIndex,head] of doc.headers.entries())drawRow(row(head),doc.headers.length>1?5.6*mm:(doc.cost?12:10)*mm,{header:true,headerIndex});bodyStart=y;
  }
@@ -152,7 +167,7 @@ export function layoutPrintDocument(doc,options={},measure=measurePrintText){
   op({type:'rect',x:left,y:startY,width:tableWidth,height:bottom-startY,fill:null,weight:.8});
  }
  start();
- const heightFor=r=>{let col=0;return Math.max(r.height?r.height*mm:rowHeight,...r.cells.map(c=>{const w=cols.slice(col,col+(c.span||1)).reduce((a,b)=>a+b,0);col+=c.span||1;return cellLines(c,w,c.fontSize||size).length*(c.fontSize||size)*(c.readable?1.3:doc.key==='formulas'?1.05:1.15)+(doc.key==='formulas'?1:4);}));};
+ const heightFor=r=>{let col=0;return Math.max(r.height?r.height*mm:rowHeight,...r.cells.map(c=>{const column=col,w=cols.slice(col,col+(c.span||1)).reduce((a,b)=>a+b,0);col+=c.span||1;const fitted=fittedCell(c,w,false,column);return fitted.lines.length*fitted.fontSize*(c.readable?1.3:doc.key==='formulas'?1.05:1.15)+(doc.key==='formulas'?1:4);}));};
  for(const [index,r] of preparedRows.entries()){
   const blockStart=r.formulaBlock&&r.formulaBlock!==preparedRows[index-1]?.formulaBlock,insideBlock=r.formulaBlock&&!blockStart;
   const block=[];if(blockStart)for(let j=index;j<preparedRows.length&&preparedRows[j].formulaBlock===r.formulaBlock;j++)block.push(preparedRows[j]);
@@ -165,7 +180,7 @@ export function layoutPrintDocument(doc,options={},measure=measurePrintText){
  }
  finish();return pages;
 }
-export function buildPrintPages(bundle,options={},measure){const s=estPrintSettings(options),pages=[],native=bundle.native&&prepareNativeSheets(bundle.native,s);for(const key of s.sections){const doc=bundle.documents.find(d=>d.key===key);if(!doc||!doc.rows.length)continue;const sheet=native?.sheets.find(n=>n.name===doc.title);pages.push(...(sheet?layoutNativeSheet(sheet,native.styles,doc,s).pages:layoutPrintDocument(doc,s,measure)));}if(!pages.length)throw Error('출력할 항목이 없습니다.');if(pages.length>1000)throw Error('출력량이 너무 많습니다. 문서를 나누어 출력하세요.');pages.forEach((p,i)=>{p.number=s.startPage+i;p.ops.push({type:'text',text:`- ${p.number} -`,x:p.width/2,y:p.footerY??(p.height-(p.orientation==='portrait'?23:12)*mm),size:8,align:'center',scale:.8});});return pages;}
+export function buildPrintPages(bundle,options={},measure){const s=estPrintSettings(options),pages=[],native=bundle.native&&prepareNativeSheets(bundle.native,s);for(const key of s.sections){const doc=bundle.documents.find(d=>d.key===key);if(!doc||!doc.rows.length)continue;const sheet=native?.sheets.find(n=>n.name===doc.title);pages.push(...(sheet?layoutNativeSheet(sheet,native.styles,doc,s).pages:layoutPrintDocument(doc,s,measure)));}if(!pages.length)throw Error('출력할 항목이 없습니다.');if(pages.length>1000)throw Error('출력량이 너무 많습니다. 문서를 나누어 출력하세요.');pages.forEach((p,i)=>{p.number=s.startPage+i;p.ops.push({type:'text',text:`- ${p.number} -`,x:p.width/2,y:p.footerY??(p.height-(p.orientation==='portrait'?23:12)*mm),size:p.footerSize??8,align:'center',scale:1});});return pages;}
 const xml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 export function printPageSvg(page){return `<svg xmlns="http://www.w3.org/2000/svg" width="${page.width}pt" height="${page.height}pt" viewBox="0 0 ${page.width} ${page.height}" role="img" aria-label="${xml(page.title)} ${page.number}쪽"><rect width="100%" height="100%" fill="white"/>`+page.ops.map(o=>o.type==='line'?`<line x1="${o.x}" y1="${o.y}" x2="${o.x2}" y2="${o.y2}" stroke="black" stroke-width="${o.weight}"/>`:o.type==='rect'?`<rect x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" fill="${o.fill==null?'none':o.fill===1?'white':'#b3b3b3'}" stroke="black" stroke-width="${o.weight}"/>`:`<text transform="translate(${o.x} ${o.y}) scale(${o.scale||1} 1)" text-anchor="${{left:'start',right:'end',center:'middle'}[o.align]||'start'}" font-family="GulimChe,굴림체,Malgun Gothic,sans-serif" font-size="${o.size}" font-weight="normal" ${Number.isFinite(o.width)&&o.width>0?`textLength="${o.width/(o.scale||1)}" lengthAdjust="spacingAndGlyphs"`:""} letter-spacing="${o.spacing||0}" stroke="${o.bold?'black':'none'}" stroke-width="${o.bold?.08:0}" xml:space="preserve">${xml(o.text)}</text>`).join('')+'</svg>';}
 export const printVectorCss='@page portrait{size:A4 portrait;margin:0}@page landscape{size:A4 landscape;margin:0}.est-vector-page{margin:0;padding:0;break-after:page;overflow:hidden}.est-vector-page:last-child{break-after:auto}.est-vector-page svg{display:block;width:100%;height:100%}';

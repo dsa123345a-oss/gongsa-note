@@ -16,7 +16,7 @@ export function costFromPrintedFormulas(item,details,sourceItems){
   if([58,62].includes(r.LinkIndex)){
    const pct=text.match(/[×*]\s*([\d.]+)\s*%/),target=targetOf(r.SCheck),basis=targetOf(r.OCheck)|| (r.LinkIndex===62?'total':null);
    if(!pct||!target||!basis||!results.length)throw Error('잡비의 기준·비목을 확인할 수 없습니다.');
-   parts.push({name:'잡비',kind:'percent',percent:Number(pct[1]),basis,target,scope:r.LinkIndex===62?'tag':'all',sumTag:String(r.SKind??0),source:item.source,originalRecord:r._record,calculationMode:!item[target]?'vertical':'auto'});
+   parts.push({name:'잡비',kind:'percent',percent:Number(pct[1]),basis,target,scope:r.LinkIndex===62?'tag':'all',sumTag:String(r.SKind??0),source:item.source,originalRecord:r._record,...(typeof r.Bigo==='string'?{rowBigo:r.Bigo}:{}),calculationMode:!item[target]?'vertical':'auto'});
    expected.push({value:Number(results.at(-1)[1].replace(/,/g,'')),target});continue;
   }
   if(!r.Code||!prices.length)continue;
@@ -35,7 +35,7 @@ export function costFromPrintedFormulas(item,details,sourceItems){
   const digits=[1,0,2,3,4,5,6].find(d=>close(truncateProduct(qty,price,10**d)/10**d,value));
   if(digits==null)throw Error('산출식의 수량·절사와 원본 금액이 다릅니다.');
   const excludedMaterial=source?.category==='자재'&&r.SCheck===0&&!r.TC;
-  parts.push({name:source?.name||r.Code,spec:source?.spec||'',unit:source?.unit||'',code:r.Code,source:item.source,library:item.library,sourceComponent:target,qtyExpression:expression,componentDigits:digits,labor:0,material:0,expense:0,other:0,[target]:price,originalRecord:r._record,sumTag:String(r.SKind??0),calculationMode:!item[target]||excludedMaterial?'vertical':'auto',formulaSource:text.replace(/[\x00-\x1f]/g,'')});
+  parts.push({name:source?.name||r.Code,spec:source?.spec||'',unit:source?.unit||'',code:r.Code,source:item.source,library:item.library,sourceComponent:target,qtyExpression:expression,componentDigits:digits,labor:0,material:0,expense:0,other:0,[target]:price,originalRecord:r._record,...(typeof r.Bigo==='string'?{rowBigo:r.Bigo}:{}),sumTag:String(r.SKind??0),calculationMode:!item[target]||excludedMaterial?'vertical':'auto',formulaSource:text.replace(/[\x00-\x1f]/g,'')});
   expected.push({value,target});
  }
  if(!parts.length)throw Error('재계산할 숫자식이 없습니다.');

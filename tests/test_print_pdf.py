@@ -3,6 +3,14 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from print_pdf import print_pdf
 class PrintPdfTests(unittest.TestCase):
+ def test_fitted_font_size_is_not_converted_to_horizontal_compression(self):
+  import pdfplumber
+  from io import BytesIO
+  text={'type':'text','text':'긴 규격 D25㎜','x':40,'y':70,'size':3.45,'scale':1,'spacing':0,'width':25.875,'align':'left'}
+  with pdfplumber.open(BytesIO(print_pdf({'pages':[{'width':595,'height':842,'ops':[text]}]}))) as doc:
+   chars=doc.pages[0].chars
+   self.assertTrue(all(abs(c['size']-3.45)<.001 for c in chars))
+   self.assertAlmostEqual(max(c['x1'] for c in chars)-min(c['x0'] for c in chars),25.875,places=3)
  def test_measured_width_and_spacing_survive_pdf_export(self):
   import pdfplumber
   from io import BytesIO

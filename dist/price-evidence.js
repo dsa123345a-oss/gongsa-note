@@ -4,18 +4,19 @@ import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';
 import {editableAssembly} from './est-edit.js';
 import {machineryRate} from './work-core.js';
 import {aggregateCalculation,manualCalculation} from './calculation-modes.js';
+import {withEstMetadata,copyMissingEstMetadata} from './est-metadata.js';
 
 export const evidenceSheetNames=['일위단가표','기계경비단가산출표','자재단가표','노임단가표'];
 const category=r=>(r.category!=='내역단가'&&r.category)||({HeadTitleDat:'일위대가',CostTitleDat:'단가산출',MachTitleDat:'장비',StuffcDat:'자재',LaborcDat:'노임'})[r.table]||(/^D/.test(r.code||'')?'단가산출':/^U/.test(r.code||'')?'일위대가':/^E/.test(r.code||'')?'장비':/^L/.test(r.code||'')?'노임':/^M/.test(r.code||'')?'자재':r.components?'일위대가':r.labor&&!r.material&&!r.expense?'노임':r.material&&!r.labor&&!r.expense?'자재':'일위대가');
 const same=(a,b)=>norm(a.name)===norm(b.name)&&norm(a.spec)===norm(b.spec)&&unitNorm(a.unit)===unitNorm(b.unit);
 export function collectPriceEvidence(project,libraries=[]){
- const nodes=[],seen=new Map(),lineNodes=new Map(),warnings=[],saved=project.evidence||[];
+ const nodes=[],seen=new Map(),lineNodes=new Map(),warnings=[],saved=project.evidence||[],metadataIndexes=new WeakMap();
  const savedByIdentity=new Map();for(const entry of saved){const key=rateIdentity(entry.rate);if(!savedByIdentity.has(key))savedByIdentity.set(key,entry);}
  function walk(input,usage,parentLib=null,stack=[]){
   const identity=rateIdentity(input),key=JSON.stringify([identity,input.library,input.machineInputs,input.sourceComponent]);if(stack.includes(key)||stack.length>=30){warnings.push(usage+' · 순환/깊은 구성은 원본 확인 필요');return null;}
   if(seen.has(key)){const node=seen.get(key);node.uses.add(usage);return node;}
   if(nodes.length+seen.size>10000)throw Error('단가 근거가 너무 많습니다. 공사를 나누어 출력하세요.');
-  const rate=structuredClone(input),lib=resolveRateLibrary(rate,libraries)||libraries.find(l=>l.name===rate.source)||parentLib;
+  const rate=structuredClone(copyMissingEstMetadata(withEstMetadata(input,libraries,metadataIndexes),savedByIdentity.get(identity)?.rate)),lib=resolveRateLibrary(rate,libraries)||libraries.find(l=>l.name===rate.source)||parentLib;
   for(const k of costKeys){rate[k]=Number(rate[k]??0);if(!Number.isFinite(rate[k]))throw Error((rate.name||'단가')+'의 금액을 확인하세요.');}rate.total=costKeys.reduce((n,k)=>n+rate[k],0);
   const kind=rate.machineInputs?'장비':category(rate),sheet=kind==='장비'?1:kind==='자재'?2:kind==='노임'?3:0;
   const prefix=sheet===1?'MachMainDat':kind==='단가산출'||/^D/.test(rate.code||'')?'CostMainDat':'HeadMainDat';
