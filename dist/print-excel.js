@@ -44,7 +44,7 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
    for(const [ri,source] of gridRows.entries()){
     const out=rows.length+1;positions.push({y:source.y,end:source.y+source.height,row:out});
     const values=Array(n).fill(''),ids=Array(n).fill(0);let c=0;
-    const horizontal=source.header||!grid.verticalOnly||source.subtotal||source.itemStart||grid.cost&&!source.group;
+    const horizontal=source.header||!grid.verticalOnly||source.subtotal||(source.itemStart&&key!=='formulas')||grid.cost&&!source.group;
     for(const cell of source.cells){
      const span=cell.span||1,start=c;c+=span;if(occupied.has(`${ri}:${start}`))continue;
      let value=cell.lines?.join('\n')??cell.value??'';

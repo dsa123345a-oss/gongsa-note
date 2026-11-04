@@ -1,3 +1,13 @@
+/* A distinct primary action for connecting imported quantities to unit prices. */
+@media screen {
+ #estimateView #suggestBtn.auto-link-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:29px;padding:4px 12px;border:1px solid #145745;border-radius:3px;background:#196b54;color:#fff;font-size:13px;font-weight:700;line-height:1.4;white-space:nowrap;box-shadow:0 1px 2px #173e2f20}
+ #estimateView #suggestBtn.auto-link-primary svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+ #estimateView #suggestBtn.auto-link-primary:hover:not(:disabled){background:#145745;border-color:#104b3b}
+ #estimateView #suggestBtn.auto-link-primary:active:not(:disabled){background:#104b3b;box-shadow:none}
+ #estimateView #suggestBtn.auto-link-primary:focus-visible{outline:3px solid #b56b00;outline-offset:2px}
+ #estimateView #suggestBtn.auto-link-primary:disabled{background:#e1e7e5;border-color:#b8c4bf;color:#65756d;box-shadow:none;opacity:1;cursor:not-allowed}
+}
+
 /* Legible desktop text, while retaining the compact command bars. */
 @media screen{
  body.est-desktop{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#202c3a;--muted:#495b6c}
@@ -85,7 +95,13 @@
 #estimateTable .est-grid textarea.heading-name{box-sizing:border-box;min-width:0;width:100%;height:auto;overflow:hidden;resize:none;line-height:1.6;padding:3px 5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}
 #estimateTable .est-grid .heading-title{height:auto;vertical-align:middle;overflow:visible}
 #estimateTable .est-grid .heading-row .grid-group{min-width:70px;width:100%}
-#quantityImportButton{font-weight:700;color:#214d76;min-width:128px;border-color:#9eb6cf;background:#f8fbff}
+@media screen {
+ .resource-toolbar #quantityImportButton{font-weight:700;color:#fff;min-width:128px;border-color:#1c507d;background:#235f96;box-shadow:0 1px 2px #17395720}
+ .resource-toolbar #quantityImportButton:hover:not(:disabled){background:#1d5182;border-color:#18436b}
+ .resource-toolbar #quantityImportButton:active:not(:disabled){background:#18436b;box-shadow:none}
+ .resource-toolbar #quantityImportButton:focus-visible{outline:3px solid #b56b00;outline-offset:2px}
+ .resource-toolbar #quantityImportButton:disabled{background:#e0e6ec;border-color:#b7c3d0;color:#647587;box-shadow:none;opacity:1;cursor:not-allowed}
+}
 body.quantity-dragging::after{content:'수량산출서를 여기에 놓으세요 · 여러 파일 가능';position:fixed;inset:85px 12px 35px;z-index:10000;display:grid;place-items:center;background:#eef6ffe8;border:3px dashed #466f96;color:#203d59;font-size:23px;font-weight:700;pointer-events:none}
 .cost-sheet input.charge-formula{width:100%;min-width:160px;font:13px/1.6 Consolas,'Malgun Gothic',sans-serif;background:transparent;border:1px solid transparent;color:#193b59;padding:2px 4px}
 

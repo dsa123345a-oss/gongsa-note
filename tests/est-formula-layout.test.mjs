@@ -47,3 +47,21 @@ test('화면·미리보기·엑셀은 원문 작업조건과 동일 분수 행�
  assert.equal(new Set(rows.map(r=>r.styles[0])).size,1);
  assert.deepEqual(project,before);
 });
+
+test('EST 단가산출은 공종 제목 아래 구분선 없이 머리글·세로선을 유지하고 엑셀도 일치한다',()=>{
+ const {project}=fixture(),bundle=makePrintDocuments(project),pages=buildPrintPages(bundle,{sections:['formulas']});
+ for(const page of pages){
+  const body=page.grid.rows.filter(r=>!r.header),head=page.grid.rows.filter(r=>r.header).at(-1);
+  assert.ok(body.some(r=>r.itemStart));
+  assert.ok(page.ops.some(o=>o.type==='line'&&o.y===head.y+head.height&&o.y2===o.y));
+  assert.ok(page.ops.some(o=>o.type==='line'&&o.x===o.x2&&o.y2>o.y));
+  for(const r of body)assert.ok(!page.ops.some(o=>o.type==='line'&&o.y===r.y+r.height&&o.y2===o.y),'본문에 가로선이 추가되지 않아야 한다');
+ }
+ const excel=vectorPrintExcelSheets(project,[],{sections:['formulas']}),sheet=excel.sheets[0];
+ const xfs=excel.styles.match(/<cellXfs[^>]*>(.*?)<\/cellXfs>/s)[1].match(/<xf\b[^>]*>.*?<\/xf>|<xf\b[^>]*\/>/gs);
+ const borders=excel.styles.match(/<borders[^>]*>(.*?)<\/borders>/s)[1].match(/<border>.*?<\/border>/gs);
+ const titles=sheet.rows.filter(r=>String(r.values[0]).startsWith('1. 터파기'));
+ assert.equal(titles.length,1);
+ for(const id of titles[0].styles){const border=Number(xfs[id].match(/borderId="(\d+)"/)[1]);assert.doesNotMatch(borders[border],/<bottom style=/);}
+ assert.ok(borders.some(b=>/<bottom style=/.test(b)));
+});
