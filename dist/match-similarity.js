@@ -1,26 +1,28 @@
+import {memoizeText} from './text-cache.js';
 import {norm,unitNorm} from './calc.js';
-export const nameNorm=value=>norm(value).replace(/소프트(?:실)?(?:제수|지수)(?:밸브|변)/g,'소프트제수밸브').replace(/계량기보호함/g,'계량기보호통')
+export const nameNorm=memoizeText(value=>norm(value).replace(/소프트(?:실)?(?:제수|지수)(?:밸브|변)/g,'소프트제수밸브').replace(/계량기보호함/g,'계량기보호통')
  .replace(/보도(?:용)?블[럭록]/g,'보도블록').replace(/xl정티/g,'xl삼방티').replace(/관로모래부설/g,'모래부설')
  .replace(/pe(?:관)?접합(?:및)?부설/g,'pe관접합및부설').replace(/이탈방지압륜kp부속/g,'이탈방지압륜')
- .replace(/^앵글밸브(?:10kg\/cm2)?자재포함$/,'앵글밸브교체').replace(/아스팔트(?=소운반)/g,'아스콘');
+ .replace(/^앵글밸브(?:10kg\/cm2)?자재포함$/,'앵글밸브교체').replace(/아스팔트(?=소운반)/g,'아스콘'));
 // Locality suffixes are labels, not different haul destinations. Keep this
 // separate from arbitrary Korean words such as 표면 or 단면.
 const localAliases={금강송면:'금강송',후포면:'후포',온정면:'온정',평해읍:'평해',울진읍:'울진',죽변면:'죽변',기성면:'기성',근남면:'근남',매화면:'매화',북면:'북면'};
 const fullLocalNames=Object.keys(localAliases).join('|'),shortLocalNames=[...new Set(Object.values(localAliases))].join('|');
-export const locationTextNorm=value=>String(value??'').normalize('NFKC').replace(new RegExp(fullLocalNames,'g'),v=>localAliases[v]);
+const localityPattern=new RegExp(fullLocalNames,'g');
+export const locationTextNorm=memoizeText(value=>value.normalize('NFKC').replace(localityPattern,v=>localAliases[v]));
 // Normalize notation, not the stored specification or the material identity.
-export const specNorm=value=>locationTextNorm(value).toLowerCase().replace(/\s+/g,'').replace(/[×*]/g,'x').replace(/ton/g,'톤').replace(/(dn|d|[φø∅])=/g,'$1')
- .replace(/(^|[=(/,x·;\-])(?:dn|d|s(?=\d+(?:\.\d+)?su)|[φø∅])?(\d+(?:\.\d+)?)(?:su|a|mm)?(?=$|[)/,x·;\-])/g,(_,prefix,size)=>prefix+'d'+Number(size));
+export const specNorm=memoizeText(value=>locationTextNorm(value).toLowerCase().replace(/\s+/g,'').replace(/[×*]/g,'x').replace(/ton/g,'톤').replace(/(dn|d|[φø∅])=/g,'$1')
+ .replace(/(^|[=(/,x·;\-])(?:dn|d|s(?=\d+(?:\.\d+)?su)|[φø∅])?(\d+(?:\.\d+)?)(?:su|a|mm)?(?=$|[)/,x·;\-])/g,(_,prefix,size)=>prefix+'d'+Number(size)));
 export const pipeWork=row=>/관|파이프|밸브|제수변|수도미터|계량기|소켓|엘보|티이|티관|삼방티|레듀샤|레듀서|니플|플랜지|압륜/.test(nameNorm(row.name));
 export function equivalentPipeDiameter(a,b){
  const x=specNorm(a),y=specNorm(b),alias=s=>s.replace(/d(?:13|15|16)(?=$|[)/,x·;\-])/g,'d15');
  return x!==y&&/d(?:13|15|16)(?=$|[)/,x·;\-])/.test(x)&&alias(x)===alias(y);
 }
+const textGrams=memoizeText(s=>new Set(Array.from({length:Math.max(0,s.length-1)},(_,i)=>s.slice(i,i+2))),4096);
 export function textSimilarity(a,b){
  if(!a||!b)return 0;if(a===b)return 1;
  if(/^[가-힣]$/.test(a)||/^[가-힣]$/.test(b))return 0;
- const grams=s=>new Set(Array.from({length:Math.max(0,s.length-1)},(_,i)=>s.slice(i,i+2)));
- const x=grams(a),y=grams(b);let hit=0;for(const g of x)if(y.has(g))hit++;
+ const x=textGrams(a),y=textGrams(b);let hit=0;for(const g of x)if(y.has(g))hit++;
  return Math.max(2*hit/(x.size+y.size||1),a.includes(b)||b.includes(a)?0.76:0);
 }
 export function specNumbers(value){return (String(value??'').normalize('NFKC').replace(/m\^?[23]/gi,' ').match(/\d+(?:\.\d+)?/g)||[]).map(Number).sort((a,b)=>a-b);}

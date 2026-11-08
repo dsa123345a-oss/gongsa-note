@@ -3,8 +3,8 @@ import {defaultChargeFormula} from './cost-formula.js';
 import {originalProfitCharge} from './profit-adjustment.js';
 
 // The screen, print page and contractor workbook share these rows and source keys.
-export function costSheet(project){
- const t=totals(project.lines,project.charges),rows=[];
+export function costSheet(project,t=totals(project.lines,project.charges)){
+ const rows=[];
  const sources={material:t.material,labor:t.labor,expense:t.expense,other:t.other,waste:t.waste,government:t.government,fees:t.fees};
  t.separateGroups.forEach((g,i)=>sources['separate:'+i]=g.amount);
  t.charges.forEach((c,i)=>sources['charge:'+i]=c.amount);
@@ -62,8 +62,8 @@ export function costSheet(project){
  return {rows,totals:t};
 }
 
-export function costSheetHtml(project,{esc,money}){
- const {rows}=costSheet(project);
+export function costSheetHtml(project,{esc,money,computedTotals}){
+ const {rows}=costSheet(project,computedTotals);
  return `<table class="cost-sheet"><colgroup><col style="width:65px"><col style="width:235px"><col style="width:42px"><col style="width:60px"><col style="width:130px"><col style="width:100px"><col><col style="width:45px"></colgroup><thead><tr><th colspan="2">비목</th><th>구분</th><th>약어</th><th>금액</th><th>요율</th><th>산출근거</th><th>출력</th></tr></thead><tbody>${rows.map(r=>{
   const c=r.charge,adjusted=r.profitRate!==undefined,locked=!adjusted&&(!!c?.link||!!c?.ruleSet),fixed=c?.base==='fixed'&&!adjusted&&!c?.formula;
   const rateValue=adjusted?r.profitRate:fixed?c?.fixed||0:c?.rate;

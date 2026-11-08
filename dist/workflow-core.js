@@ -2,8 +2,8 @@ import {totals,synchronizeLinkedCosts,bidPercent} from './calc.js';
 import {withBidLines,bidFixedCharges} from './bid-core.js';
 import {reverseContract} from './work-core.js';
 import {manualCalculation} from './calculation-modes.js';
-export function budgetStatus(project){
- const t=totals(project.lines,project.charges),limit=project.contractLimit??(/긴급|보수/.test(project.title)?10000000:0);
+export function budgetStatus(project,t=totals(project.lines,project.charges)){
+ const limit=project.contractLimit??(/긴급|보수/.test(project.title)?10000000:0);
  return {limit,amount:t.contract,remaining:limit-t.contract,exceeded:limit>0&&t.contract>=limit,partial:!!t.missing,discounted:project.lines.some(l=>bidPercent(l)!==100||l.rate?.evidenceBid)};
 }
 export function prepareContractor(input,{mode='current',percent=95,digits=0,target=null}={}){

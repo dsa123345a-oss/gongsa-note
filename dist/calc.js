@@ -1,3 +1,4 @@
+import {memoizeText} from './text-cache.js';
 import {selectRateRule} from './rate-policy.js';
 import {resolveLineAdjustments} from './line-adjustments.js';
 import {restoreEmergencySurcharges} from './emergency-rules.js';
@@ -6,8 +7,8 @@ import {evaluateCostFormula,costReferences} from './cost-formula.js';
 import {resolveCostScopes,separateCostGroups,arrangeSeparateCosts} from './cost-scopes.js';
 import {reserveWorkConnectionJoints} from './work-connection-joints.js';
 export const cleanNumber = n => n==null || (typeof n==='string'&&!n.trim()) ? null : Number.isFinite(Number(n)) ? Number(Number(n).toPrecision(14)) : null;
-export const norm=s=>String(s??'').normalize('NFKC').toLowerCase().replace(/[\s\u200b-\u200d\ufeff\u00ad]|[()\[\],._-]/g,'').replace(/×/g,'x');
-export const unitNorm=s=>norm(s).replace(/㎥|m³|m\^3/g,'m3').replace(/㎡|m²|m\^2/g,'m2').replace(/톤/g,'ton').replace(/ℓ/g,'l');
+export const norm=memoizeText(s=>s.normalize('NFKC').toLowerCase().replace(/[\s\u200b-\u200d\ufeff\u00ad]|[()\[\],._-]/g,'').replace(/×/g,'x'));
+export const unitNorm=memoizeText(s=>norm(s).replace(/㎥|m³|m\^3/g,'m3').replace(/㎡|m²|m\^2/g,'m2').replace(/톤/g,'ton').replace(/ℓ/g,'l'));
 function fraction(value){
   const n=cleanNumber(value);if(n===null || Math.abs(n)>1e14)throw Error('계산 가능한 숫자 범위를 벗어났습니다.');
   const [mantissa,exponent='0']=String(n).toLowerCase().split('e');

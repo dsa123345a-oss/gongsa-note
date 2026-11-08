@@ -45,6 +45,9 @@ export function preferredLibrary(project,libraries){
 }
 export function planAutoLinks(project,libraries,libraryId='',priorityId='',profile=getActiveLearning()){
  const items=libraries.filter(l=>!libraryId||l.id===libraryId).flatMap(l=>l.items.map(item=>({item,identity:targetIdentity(item),name:norm(item.name),matchingName:nameNorm(item.name),spec:norm(item.spec),unit:unitNorm(item.unit),source:l.name,library:l.id})));
+ const validItems=items.filter(({item,name})=>name&&['labor','material','expense','other','total'].every(k=>Number.isFinite(item[k]))&&item.total>=0&&['labor','material','expense'].every(k=>item[k]>=0));
+ const byIdentity=new Map();for(const [order,entry] of validItems.entries()){entry.order=order;const list=byIdentity.get(entry.identity)||[];list.push(entry);byIdentity.set(entry.identity,list);}
+ const candidatesByName=new Map();
  const cache=new Map(),nameScores=new Map(),learned=learningIndex(project.connectionLearningEnabled===false?{rules:[]}:profile),kind=connectionKind(project),pricer=createResourcePricer(project,libraries),contexts=wasteContexts(project);
  return project.lines.filter(l=>!l.level&&!l.exclude&&!l.surcharge&&!l.deduction&&l.status!=='confirmed').map(line=>{
   const matching=withWasteContext(line,contexts),signature=lineSignature(line),site=/폐기물/.test(nameNorm(line.name))?JSON.stringify([line.sourceFile,line.location,matching.wasteContext]):'',cacheKey=signature+'|'+site+'|'+(line.specError||'')+'|'+JSON.stringify(line.dbReference||null);if(cache.has(cacheKey))return {...cache.get(cacheKey),line};
@@ -59,10 +62,15 @@ export function planAutoLinks(project,libraries,libraryId='',priorityId='',profi
   const name=norm(line.name),matchingName=nameNorm(line.name),spec=norm(line.spec),unit=unitNorm(line.unit),saved=project.mappings?.[signature],found=[],seen=new Set();
   if(!nameScores.has(matchingName))nameScores.set(matchingName,new Map());const scores=nameScores.get(matchingName);
   const choices=learnedChoices(line,kind,learned),choiceMap=new Map();for(const choice of choices){if(!choiceMap.has(choice.identity)||choiceMap.get(choice.identity).bonus<choice.bonus)choiceMap.set(choice.identity,choice);}
-  for(const entry of items){
-   const {item}=entry;if(!name||!entry.name)continue;
-   if(!['labor','material','expense','other','total'].every(k=>Number.isFinite(item[k])))continue;
-   if(item.total<0||['labor','material','expense'].some(k=>item[k]<0))continue;
+  if(!candidatesByName.has(matchingName))candidatesByName.set(matchingName,validItems.filter(entry=>{
+   let score=scores.get(entry.matchingName);if(score===undefined){score=textSimilarity(matchingName,entry.matchingName);scores.set(entry.matchingName,score);}return score>=.48;
+  }));
+  // Learned strong aliases may cross the fuzzy-name threshold. Merge them in
+  // original DB order so equal-score candidates and duplicate handling agree.
+  const candidates=new Set(candidatesByName.get(matchingName));
+  for(const [identity,choice] of choiceMap)if(choice.strong)for(const entry of byIdentity.get(identity)||[])candidates.add(entry);
+  for(const entry of [...candidates].sort((a,b)=>a.order-b.order)){
+   const {item}=entry;if(!name)continue;
    const knowledge=choiceMap.get(entry.identity);
    let n=scores.get(entry.matchingName);if(n===undefined){n=textSimilarity(matchingName,entry.matchingName);scores.set(entry.matchingName,n);}if(n<0.48&&!knowledge?.strong)continue;
    if(!compatibleWork(matching,item))continue;

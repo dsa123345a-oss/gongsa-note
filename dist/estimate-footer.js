@@ -2,8 +2,8 @@ import {costSheet} from './cost-sheet.js';
 import {separateBucket} from './cost-scopes.js';
 
 export const separateCostNames=['폐기물처리비','현장점검비','관급자재대','원인자부담금','수수료'];
-export function estimateFooterRows(project){
- const {rows,totals:t}=costSheet(project);
+export function estimateFooterRows(project,computedTotals){
+ const {rows,totals:t}=costSheet(project,computedTotals);
  const chargeRows=rows.filter(r=>r.charge&&!['management','profit','vat'].includes(r.charge.key));
  return [
   {id:'direct',name:'순공사비 (전체 직접공사비)',amount:t.direct,costs:t},
@@ -11,8 +11,8 @@ export function estimateFooterRows(project){
   ...rows.filter(r=>['net','beforeVat','contract','grand'].includes(r.id)||['management','profit','vat'].includes(r.charge?.key)).map(r=>({...r,editable:!!r.charge})),
  ];
 }
-export function estimateFooterHtml(project,costs,{esc,money}){
- return estimateFooterRows(project).map(r=>`<tr class="estimate-summary-row ${r.id==='grand'?'estimate-grand':''}" data-estimate-summary="${esc(r.id)}"><td colspan="10">${r.editable?`<button class="mini-link" data-open-cost-summary title="원가계산서에서 요율 수정">${esc(r.name)}</button>`:esc(r.name)}${r.rate?` <small>${esc(r.rate)}</small>`:''}</td><td class="number" data-summary-amount>${money(r.amount)}</td>${costs.map(k=>`<td></td><td class="number">${r.costs?money(r.costs[k]):''}</td>`).join('')}<td colspan="3">${r.id==='direct'&&r.costs?.missing?'미확정 제외 부분합':r.id==='overhead'?'간접노무비·보험료 등':r.id==='grand'?'아래 별도 비용까지 포함':r.editable?'원가계산서 연동':''}</td></tr>`).join('');
+export function estimateFooterHtml(project,costs,{esc,money,computedTotals}){
+ return estimateFooterRows(project,computedTotals).map(r=>`<tr class="estimate-summary-row ${r.id==='grand'?'estimate-grand':''}" data-estimate-summary="${esc(r.id)}"><td colspan="10">${r.editable?`<button class="mini-link" data-open-cost-summary title="원가계산서에서 요율 수정">${esc(r.name)}</button>`:esc(r.name)}${r.rate?` <small>${esc(r.rate)}</small>`:''}</td><td class="number" data-summary-amount>${money(r.amount)}</td>${costs.map(k=>`<td></td><td class="number">${r.costs?money(r.costs[k]):''}</td>`).join('')}<td colspan="3">${r.id==='direct'&&r.costs?.missing?'미확정 제외 부분합':r.id==='overhead'?'간접노무비·보험료 등':r.id==='grand'?'아래 별도 비용까지 포함':r.editable?'원가계산서 연동':''}</td></tr>`).join('');
 }
 export function separateCostToolbar(project,columns,esc){
  const sections=project.lines.filter(l=>l.level>=2);

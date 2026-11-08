@@ -16,7 +16,7 @@ function libraryIndex(library){
   }
  }
  index.entries.length=library.items.length;
- if(changed){index.search.clear();index.rank.clear();}return index;
+ if(changed){index.search.clear();index.rank.clear();index.byItem=new Map(index.entries.map(e=>[e.item,e]));}return index;
 }
 function remember(map,key,value){if(map.size>=16)map.delete(map.keys().next().value);map.set(key,value);return value;}
 
@@ -29,12 +29,15 @@ export function mergeLibrary(libraries, incoming) {
 
 // Keep each database independent, including identical codes and zero-result databases.
 export function searchLibraries(libraries, query='', category='', libraryId='') {
+ return searchGroups(libraries,query,category,libraryId);
+}
+function searchGroups(libraries,query,category,libraryId,requestIndexes=new Map()){
  const terms=String(query).trim().split(/[\s&]+/).map(q=>nameNorm(locationTextNorm(q))).filter(Boolean);
  if(!terms.length){const q=norm(query);return [...libraries].sort((a,b)=>Number(!!b.isMain)-Number(!!a.isMain)).filter(l=>!libraryId||l.id===libraryId).map(library=>({library,items:library.items.filter(item=>!category||item.category===category).map(item=>({item,exact:norm(item.name)===q})).sort((a,b)=>Number(b.exact)-Number(a.exact)).map(e=>e.item),related:false}));}
  const queryPlain=norm(query),korean=queryPlain.replace(/[^가-힣]/g,''),queryName=prepared(nameNorm(query).replace(/\d+(?:\.\d+)?(?:mm|cm|m)?/gi,'').replace(/[=ΦφØø]/g,'')),termSpecs=terms.map(specNorm),termPlaces=terms.map(t=>t.replace(/(?:읍|면)$/, ''));
  return [...libraries].sort((a,b)=>Number(!!b.isMain)-Number(!!a.isMain))
   .filter(l=>!libraryId||l.id===libraryId)
-  .map(library=>{const index=libraryIndex(library),key=JSON.stringify([query,category]);let result=index.search.get(key);
+  .map(library=>{const index=libraryIndex(library),key=JSON.stringify([query,category]);requestIndexes.set(library,index);let result=index.search.get(key);
    if(!result){
     const source=index.entries.filter(e=>!category||e.category===category);
     const exact=source.filter(e=>terms.every((term,i)=>e.text.includes(term)||e.specKey===termSpecs[i]||e.route.includes(termPlaces[i]))).sort((a,b)=>Number(b.plain===queryPlain)-Number(a.plain===queryPlain));
@@ -55,9 +58,10 @@ export function searchLibraries(libraries, query='', category='', libraryId='') 
 // row's matching material, work type and diameter at the top of each window.
 export function searchLineLibraries(libraries,line,query=line.name,category='',libraryId=''){
  const key=JSON.stringify([query,category,...['name','spec','group','bucket','location','sourceFile','specError'].map(k=>line[k])]),name=prepared(nameNorm(line.name)),pipe=pipeWork(line);
- return searchLibraries(libraries,query,category,libraryId).map(group=>{
-  const index=libraryIndex(group.library);let items=index.rank.get(key);
-  if(!items){const entries=new Map(index.entries.map(e=>[e.item,e]));
+ const requestIndexes=new Map();
+ return searchGroups(libraries,query,category,libraryId,requestIndexes).map(group=>{
+  const index=requestIndexes.get(group.library)||libraryIndex(group.library);let items=index.rank.get(key);
+  if(!items){const entries=index.byItem||new Map();
    items=group.items.map((item,i)=>{const e=entries.get(item);return {item,index:i,compatible:compatibleWork(line,item),nameExact:name.text===e.name.text,spec:compareSpecs(line.spec,item.spec,{diameterAliases:pipe&&e.pipe}).score,nameScore:similarity(name,e.name)};}).sort((a,b)=>Number(b.compatible)-Number(a.compatible)||Number(b.nameExact)-Number(a.nameExact)||b.spec-a.spec||b.nameScore-a.nameScore||a.index-b.index).map(r=>r.item);
    remember(index.rank,key,items);
   }return {...group,items:items.slice()};

@@ -4,7 +4,29 @@ import {searchLibraries,searchLineLibraries} from '../dist/library-search.js';
 import {collectEvidence} from '../dist/project-data.js';
 import {createDeferredTask} from '../dist/deferred-task.js';
 import {createProjectHistory} from '../dist/project-history.js';
+import {memoizeText} from '../dist/text-cache.js';
+import {totals} from '../dist/calc.js';
+import {costSheet} from '../dist/cost-sheet.js';
+import {estimateFooterRows} from '../dist/estimate-footer.js';
+import {budgetStatus} from '../dist/workflow-core.js';
 const rate=(name,spec='D20')=>({name,spec,unit:'개',code:'M1',category:'자재',labor:0,material:100,expense:0,total:100});
+
+test('문자 캐시는 입력 변경·비우기·용량 초과 후에도 같은 정규화 결과를 낸다',()=>{
+ let calls=0;const normalize=memoizeText(s=>{calls++;return s.normalize('NFKC').trim();},2);
+ assert.equal(normalize(' Ａ '),'A');assert.equal(normalize(' Ａ '),'A');assert.equal(calls,1);
+ let value='D20';const mutable={toString:()=>value};assert.equal(normalize(mutable),'D20');
+ value='D50';assert.equal(normalize(mutable),'D50');assert.equal(normalize(null),'');assert.equal(normalize(undefined),'');
+ assert.equal(normalize(' Ａ '),'A');const before=calls;
+ normalize('x'.repeat(513));normalize('x'.repeat(513));assert.equal(calls,before+2);
+});
+
+test('한 화면의 공통 합계로 만든 원가·하단·한도 표시는 직접 계산과 같고 다음 편집도 반영한다',()=>{
+ const p={title:'긴급보수',lines:[{id:'a',name:'작업',spec:'',unit:'개',qty:3,bucket:'direct',factor:1,status:'confirmed',rate:{...rate('작업'),other:0}},{id:'b',name:'폐기물',spec:'',unit:'톤',qty:2,bucket:'waste',factor:1,status:'confirmed',rate:{...rate('폐기물'),other:0}}],charges:[]};
+ for(const qty of [3,7,0]){
+  p.lines[0].qty=qty;const t=totals(p.lines,p.charges),snapshot=structuredClone(t);
+  assert.deepEqual(costSheet(p,t),costSheet(p));assert.deepEqual(estimateFooterRows(p,t),estimateFooterRows(p));assert.deepEqual(budgetStatus(p,t),budgetStatus(p));assert.deepEqual(t,snapshot);
+ }
+});
 test('검색 캐시는 품명·규격·분류·비목 수정과 같은 길이 DB 교체를 즉시 반영한다',()=>{
  const item=rate('STS소켓'),lib={items:[item]},line={name:item.name,spec:'D20',group:'자재대'};
  assert.equal(searchLineLibraries([lib],line)[0].items[0],item);
