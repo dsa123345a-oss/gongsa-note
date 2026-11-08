@@ -28,8 +28,8 @@ test('같은 코드의 다른 DB와 다른 규격을 사용하지 않는다',()=
  const linked=applyAutoLinks(p,plans,'test').lines[0];assert.equal(linked.qty,5);assert.equal(linked.unit,target.unit);assert.equal(linked.name,target.name);assert.equal(linked.spec,target.spec);assert.equal(linked.status,'proposed');
  assert.equal(planAutoLinks(p,libs.slice(0,1))[0].rate,undefined);
 });
-test('미선택·손상·중복 연결정보는 유사 검색으로 자동 확정하지 않는다',()=>{
- for(const patch of [{status:'unresolved',target:null},{status:'invalid'}]){
+test('손상·중복 연결정보는 유사 검색으로 자동 확정하지 않는다',()=>{
+ for(const patch of [{status:'invalid'},{status:'unresolved',target}]){
   const row=attachQuantityContracts(readQuantityContracts(sheets(patch))[0],[line()])[0];
   assert.equal(planAutoLinks({lines:[row]},[{id:'x',name:'추가 DB',items:[rate()]}])[0].rate,undefined);
  }
@@ -58,4 +58,46 @@ test('병합 품명 옆 실제 규격 칸을 읽어 선택한 DB 규격과 연�
  tabs[0].rows[0].cells.H.value='';tabs[0].rows[0].cells.M={value:target.spec};
  const rows=attachQuantityContracts(readQuantityContracts(tabs)[0],[{...line(),spec:''}]);assert.equal(rows[0].spec,target.spec);assert.equal(rows[0].dbReference.state,'linked');
  assert.equal(referencedQuantityRate(rows[0],[{item:rate(),source:'추가 DB'}]).rate.id,'r');
+});
+
+test('생성기에서 DB를 선택하지 않은 엑셀과 기존 저장본은 공사노트에서 검색한다',()=>{
+ const libs=[{id:'x',name:'추가 DB',items:[rate()]}];
+ for(const state of ['unresolved','quantity']){
+  const row=attachQuantityContracts(readQuantityContracts(sheets({status:state,target:null}))[0],[line()])[0];
+  assert.equal(referencedQuantityRate(row,[]),null);
+  assert.ok(!row.note?.includes('미선택'));
+  const saved=JSON.parse(JSON.stringify(row));
+  const expected=planAutoLinks({lines:[line()],mappings:{}},libs)[0];
+  const actual=planAutoLinks({lines:[saved],mappings:{}},libs)[0];
+  assert.ok(actual.rate);
+  assert.deepEqual(actual.rate,expected.rate);
+  assert.equal(actual.recommended,expected.recommended);
+  assert.equal(actual.reason,expected.reason);
+ }
+});
+
+test('미선택이라도 손상되거나 중복된 엑셀과 조건형 가산은 일반 품 검색을 하지 않는다',()=>{
+ for(const change of [
+  t=>t[0].rows[0].cells.H.value='D50',
+  t=>t[1].rows.push({...t[1].rows[2],index:5}),
+  t=>t[1].rows[2].cells.A.value='{broken',
+ ]){
+  const tabs=sheets({status:'unresolved',target:null});change(tabs);
+  const row=attachQuantityContracts(readQuantityContracts(tabs)[0],[line()])[0];
+  assert.ok(referencedQuantityRate(row,[]));
+ }
+ assert.ok(referencedQuantityRate({...line(),dbReference:{state:'conditional',target:null,expected:target}},[]));
+ const row={...line(),dbReference:{state:'unresolved',target:null,expected:target}};
+ row.spec='D50';assert.ok(referencedQuantityRate(row,[]));
+});
+
+test('기존 저장본에서 연결이 성공하면 미선택 안내만 지우고 사용자 비고는 보존한다',()=>{
+ const row=attachQuantityContracts(readQuantityContracts(sheets({status:'unresolved',target:null}))[0],[line()])[0];
+ row.note='사용자 비고 / 수량산출서에서 DB 품목 미선택 · 직접 확인 후 연결';
+ const libs=[{id:'x',name:'추가 DB',items:[rate()]}],p={lines:[row],mappings:{}};
+ const plans=planAutoLinks(p,libs);
+ const result=applyAutoLinks(p,plans,'test');
+ assert.equal(result.lines[0].note,'사용자 비고');
+ assert.equal(result.lines[0].qty,5);
+ assert.ok(p.lines[0].note.includes('미선택'));
 });

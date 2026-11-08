@@ -15,6 +15,20 @@ export function validateAdjustment(line){
  if(s.kpAllowance&&(s.target!=='components'||s.scope!=='selected'||s.basis!=='total'||line.qty>30||s.includeSurcharges))throw Error('KP 압륜 가산의 비목별 대상과 30% 이내 요율을 확인하세요.');
  if(s.scope==='selected'&&(!Array.isArray(s.sourceIds)||!s.sourceIds.length||new Set(s.sourceIds).size!==s.sourceIds.length))throw Error('할증 기준 행을 선택하세요.');
 }
+function sameKpTarget(saved,line){
+ if(saved.id!==line.id)return false;
+ if(line.dbReference?.state!=='quantity')return ['name','spec','unit'].every(k=>String(saved[k])===String(line[k]));
+ // A quantity sheet can specify a diameter before the estimator selects the work method.
+ const compact=v=>String(v??'').replace(/\s/g,'').toLowerCase();
+ const diameter=v=>compact(v).match(/^(?:dn|d|[φø])?=?(\d+)(?:mm|a)?$/)?.[1];
+ const base=compact(saved.name),size=diameter(saved.spec);
+ if(!size||!/^kp메커니컬접합및부설(?:\((?:인력|기계)\))?$/.test(base))return false;
+ return [line,line.rate].every(item=>{
+  const name=compact(item?.name);
+  return (name===base||name.replace(/\((?:인력|기계)\)$/,'')===base)&&
+   diameter(item.spec)===size&&compact(item.unit)===compact(saved.unit);
+ });
+}
 export function resolveLineAdjustments(input){
  const lines=input.map(l=>({...l})),warnings=[];
  for(let i=0;i<lines.length;i++){
@@ -31,7 +45,7 @@ export function resolveLineAdjustments(input){
    if(s.kpAllowance){
     const a=s.kpAllowance,totalQty=sources.reduce((n,x)=>n+x.qty,0);
     if(sources.some(x=>manualCalculation(x)||x.surcharge||![x.name,x.rate?.name].every(n=>/KP.*접합.*부설/i.test(String(n).replace(/\s/g,'')))||[x.spec,x.rate?.spec].some(v=>/이탈방지압륜/.test(String(v).replace(/\s/g,'')))))throw Error('압륜이 포함되지 않은 실제 KP 기본 품을 다시 지정하세요.');
-    if(!Number.isFinite(a.quantity)||a.quantity<=0||a.quantity>totalQty||!Number.isFinite(a.totalQuantity)||Math.abs(a.totalQuantity-totalQty)>1e-8||!Array.isArray(a.identities)||a.identities.length!==sources.length||sources.some(x=>!a.identities.some(t=>t.id===x.id&&['name','spec','unit'].every(k=>String(t[k])===String(x[k])))))throw Error('압륜 가산 대상 KP 품의 관경·수량이 바뀌었습니다. 다시 지정하세요.');
+    if(!Number.isFinite(a.quantity)||a.quantity<=0||a.quantity>totalQty||!Number.isFinite(a.totalQuantity)||Math.abs(a.totalQuantity-totalQty)>1e-8||!Array.isArray(a.identities)||a.identities.length!==sources.length||sources.some(x=>!a.identities.some(t=>sameKpTarget(t,x))))throw Error('압륜 가산 대상 KP 품의 관경·수량이 바뀌었습니다. 다시 지정하세요.');
     const key=JSON.stringify([...s.sourceIds].sort()),peers=lines.filter(x=>!x.exclude&&x.surcharge?.kpAllowance&&JSON.stringify([...x.surcharge.sourceIds].sort())===key);
     if(peers.filter(x=>String(x.surcharge.kpAllowance.targetMaterialId||'')===String(a.targetMaterialId||'')).length>1||peers.reduce((n,x)=>n+x.surcharge.kpAllowance.quantity,0)>totalQty)throw Error('같은 KP 대상의 압륜 가산이 중복되었거나 대상 본수 합계가 초과했습니다.');
     const signatures=new Set(sources.map(x=>JSON.stringify([x.rate.labor,x.rate.material,x.rate.expense,x.rate.other,x.factor,bidPercent(x),x.bidMethod])));

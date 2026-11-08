@@ -59,6 +59,8 @@ const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g
 const num=n=>n==null?'—':displayNumber.format(Number(n));
 const money=n=>n==null?'—':displayMoney.format(Number(n));
 const bases={labor:'직접노무비',totalLabor:'직접+간접 노무비',laborMaterial:'직접노무비+직접재료비',totalLaborMaterial:'전체 노무비+직접재료비',health:'앞선 건강보험료',direct:'직접공사비',net:'직접공사비+앞선 제경비',profitBase:'노무비+경비+앞선 제경비',contractBeforeVat:'직접공사비+앞선 제경비+폐기물',government:'관급자재대',fixed:'정액 입력'};
+let entryLines=[];
+const entryLine={id:'new-estimate-entry',name:'',spec:'',unit:'',qty:1,group:'',bucket:'direct',status:'unmatched',rate:null,factor:1,exclude:false,source:'직접 입력'};
 const newState=()=>({schema:1,title:'',location:'',quantityFile:'',lines:[],charges:defaultCharges(),ratesReviewed:false,mappings:{}});
 let rowSelection=null;
 let selectedLineId=null,workTools=null,workspaceWindows=null,evidenceWorkspace=null,projectHistory=null,selectedCostKey=null;
@@ -112,7 +114,7 @@ function renderStats(){
  $('totalHint').textContent=project.costWarnings?.length?project.costWarnings.join(' '):t.missing?`미연결 ${t.missing}건 제외 부분합`:'제경비·관급·별도비 포함';
  if(pending)$('totalHint').textContent+=` · 자동 연결 검토 ${pending}건`;
  $('totalHint').classList.toggle('error-text',!!t.missing||!!project.costWarnings?.length);
- $('rowHint').textContent=project.lines.length?`${project.quantityFile||'직접 작성'} · 전체 ${project.lines.length}행`:'먼저 수량산출서를 가져오세요.';
+ $('rowHint').textContent=project.lines.length?`${project.quantityFile||'직접 작성'} · 전체 ${project.lines.length}행`:'품명 칸에 입력하거나 수량산출서를 가져오세요.';
  $('validationText').textContent=t.missing?`${t.missing}건의 단가 또는 수량 확인이 필요합니다. 표시 금액은 확정 항목의 부분합입니다.`:'엑셀 원본 수량 보존 · 확정한 단가로 계산';
  $('validationText').classList.toggle('error-text',!!t.missing);
 }
@@ -128,7 +130,23 @@ function renderLines(){
  if(!lines.some(l=>l.id===selectedLineId))selectedLineId=null;
  rowSelection?.refresh(lines.map(l=>l.id),selectedLineId);
  $('deleteLine').disabled=!(rowSelection?.ids.length||selectedLineId);
- if(!project.lines.length){$('estimateTable').innerHTML='<div class="empty-state"><div class="empty-symbol">▤</div><strong>수량산출서를 가져와 시작하세요.</strong><p>수량산출 엑셀을 열고, 노임·자재·장비·단가·일위 버튼으로 단가를 연결하세요.</p></div>';return;}
+ if(!project.lines.length){
+  const options={selectedLineId,subtotals,hierarchy,esc,num,money};
+  const table=$('estimateTable');
+  table.classList.add('empty-estimate');
+  table.innerHTML=estimateGrid([{...entryLine,qty:null}],options);
+  table.querySelector('table').style.height='auto';
+  workTools?.applyPreferences();
+  const rowHeight=table.querySelector('tbody tr').getBoundingClientRect().height||32;
+  const headerHeight=table.querySelector('thead').getBoundingClientRect().height;
+  const count=Math.max(1,Math.min(100,Math.floor((table.clientHeight-headerHeight)/rowHeight)));
+  entryLines=Array.from({length:count},(_,i)=>({...entryLine,id:entryLine.id+'-'+i,qty:null}));
+  table.innerHTML=estimateGrid(entryLines,options);
+  rowSelection?.refresh(entryLines.map(l=>l.id),selectedLineId);
+  workTools?.applyPreferences();
+  return;
+ }
+ $('estimateTable').classList.remove('empty-estimate');
  if(!lines.length){$('estimateTable').innerHTML='<div class="empty-state"><strong>이 조건에 해당하는 내역이 없습니다.</strong></div>';return;}
  $('estimateTable').innerHTML=estimateGrid(lines,{selectedLineId,subtotals,hierarchy,esc,num,money,directTotal:totals(project.lines,project.charges),project});
  rowSelection?.paint();
@@ -279,6 +297,24 @@ document.addEventListener('click',e=>{const close=e.target.closest('[data-close]
 $('quantityInput').onchange=e=>{const files=[...e.target.files];e.target.value='';if(files.length)quantityImporter.open(files);};$('estInput').onchange=e=>e.target.files.length&&importLibraries([...e.target.files]);
 $('projectTitle').oninput=e=>editProjectTitle(e.target.value,false);$('projectLocation').oninput=e=>{project.location=e.target.value;changed();};
 $('showExcluded').onchange=renderLines;$('statusFilter').onchange=renderLines;$('groupFilters').onclick=e=>{const b=e.target.closest('[data-group]');if(b){group=b.dataset.group;renderLines();}};
+// The first empty row becomes project data only when the user edits it.
+function activateEntry(id){
+ if(project.lines.length)return;
+ const entry=entryLines.find(l=>l.id===id);
+ if(!entry)return;
+ project.lines.push({...entry,qty:1});
+ selectedLineId=id;
+ const table=$('estimateTable');
+ table.classList.remove('empty-estimate');
+ for(const row of table.querySelectorAll('tbody tr[data-id]'))if(row.dataset.id!==id)row.remove();
+ const selector=table.querySelector('[data-select-row]');if(selector)selector.textContent='1';
+ rowSelection?.refresh([id],id);
+}
+function beginEntry(event){
+ if(event.type==='click'&&!event.target.closest('button[data-match],button[data-copy],button[data-bid-line]'))return;
+ activateEntry(event.target.closest('[data-id]')?.dataset.id);
+}
+for(const type of ['input','change','click'])$('estimateTable').addEventListener(type,beginEntry,true);
 $('estimateTable').oninput=e=>{const input=e.target.closest('[data-field="qty"],[data-separate-price]'),row=e.target.closest('[data-id]');if(!input||!row)return;const l=project.lines.find(l=>l.id===row.dataset.id),previous=l.qty,previousRate=l.rate,isPrice=input.hasAttribute('data-separate-price');try{if(isPrice){if(input.value==='')return;Object.assign(l,setSeparateUnitPrice(l,input.value));}else{l.qty=input.value===''?null:cleanNumber(input.value);if(l.qty!=null&&l.qty<0&&!l.deduction)l.qty=null;}const a=amount(l);renderStats();if(isPrice){const rate=appliedRate(l);row.querySelectorAll('[data-unit-cost-key]').forEach(cell=>cell.textContent=num(rate[cell.dataset.unitCostKey]));}row.querySelectorAll('.cost-cell').forEach(cell=>cell.textContent=a?money(a[cell.dataset.costKey]):'—');row.querySelector('.line-total').textContent=a?money(a.total):'미확정';row.classList.toggle('unconfirmed-row',!a);const h=hierarchyTotals(project.lines);for(const tr of $('estimateTable').querySelectorAll('.heading-row')){const value=h.get(tr.dataset.id);if(value){tr.querySelectorAll('[data-cost-key]').forEach(cell=>cell.textContent=money(value[cell.dataset.costKey]));tr.querySelector('[data-heading-total]').textContent=money(value.total);tr.querySelector('[data-heading-note]').textContent=`L${value.level} 공종 소계${value.missing?' · 미확정 '+value.missing+'건':''}`;}}for(const b of $('projectTree').querySelectorAll('[data-scroll-id]')){const small=b.querySelector('small'),value=h.get(b.dataset.scrollId);if(small&&value)small.textContent=money(value.total);}for(const b of $('projectTree').querySelectorAll('[data-group]')){const small=b.querySelector('small');if(small){const t=totals(project.lines.filter(l=>l.group===b.dataset.group),[]);small.textContent=money(t.direct+t.government+t.waste+t.fees);}}changed();}catch(error){l.qty=previous;l.rate=previousRate;input.value=isPrice?previousRate?.total??0:previous??'';toast(error.message);}};
 $('estimateTable').onchange=e=>{if(e.target.matches('[data-separate-price]')){const id=e.target.closest('[data-id]').dataset.id;try{project.lines=project.lines.map(l=>l.id===id?setSeparateUnitPrice(l,e.target.value):l);renderStats();renderLines();changed();}catch(error){toast(error.message);}return;}const input=e.target.closest('[data-field]'),row=e.target.closest('[data-id]');if(!input||!row)return;const l=project.lines.find(l=>l.id===row.dataset.id),f=input.dataset.field;if(f==='qty')return;if(f==='include')l.exclude=!input.checked;else if(f==='level'){const n=Number(input.value);l.level=Number.isInteger(n)&&n>=0&&n<=9?n:0;if(l.level>=2)l.headingScope='direct';}else if(f==='qty'){l.qty=input.value===''?null:cleanNumber(input.value);if(l.level!=null&&(!Number.isInteger(l.level)||l.level<0||l.level>9))throw Error('공종 레벨은 0부터 9까지입니다.');if(l.qty!=null&&l.qty<0){toast('수량은 0 이상이어야 합니다.');l.qty=null;}}else{l[f]=input.value;if(l.level&&f==='bucket')l.costScope=input.value;if(l.autoHeading==='project'&&f==='name'){project.title=l.name;$('projectTitle').value=l.name;$('desktopProjectTitle').value=l.name;}if(['name','spec','unit'].includes(f)&&!l.manualSeparate){l.status='unmatched';l.rate=null;delete l.autoMatch;}}renderStats();renderLines();changed();};
 $('estimateTable').onclick=e=>{if(e.target.closest('[data-open-cost-summary]')){switchView('summary');return;}if(e.target.closest('[data-add-separate]')){try{const result=addSeparateCost(project,$('estimateTable').querySelector('[data-separate-kind]').value,$('estimateTable').querySelector('[data-separate-section]').value);project=result.project;selectedLineId=result.line.id;group='';$('statusFilter').value='';renderStats();renderLines();changed();const input=$('estimateTable').querySelector(`tr[data-id="${selectedLineId}"] [data-separate-price]`);input?.scrollIntoView({block:'center'});input?.focus();input?.select();}catch(error){toast(error.message);}return;}const fold=e.target.closest('[data-fold]');if(fold){const l=project.lines.find(l=>l.id===fold.dataset.fold);l.collapsed=!l.collapsed;renderLines();changed();return;}const tr=e.target.closest('[data-id]');if(tr&&!rowSelection){selectedLineId=tr.dataset.id;$('deleteLine').disabled=false;if($('matchDialog').open&&activeLine?.id!==selectedLineId)openMatch(selectedLineId);$('estimateTable').querySelectorAll('[data-id]').forEach(r=>r.classList.toggle('selected-line',r.dataset.id===selectedLineId));}const copy=e.target.closest('[data-copy]'),up=e.target.closest('[data-move-up]'),down=e.target.closest('[data-move-down]');if(copy||up||down){const id=copy?.dataset.copy||up?.dataset.moveUp||down?.dataset.moveDown,idx=project.lines.findIndex(l=>l.id===id);if(copy)project.lines.splice(idx+1,0,{...structuredClone(project.lines[idx]),id:crypto.randomUUID()});else{const dest=idx+(up?-1:1);if(dest>=0&&dest<project.lines.length)[project.lines[idx],project.lines[dest]]=[project.lines[dest],project.lines[idx]];}renderStats();renderLines();changed();return;}const m=e.target.closest('[data-match]'),d=e.target.closest('[data-delete]'),detail=e.target.closest('[data-detail-line]');if(m)openMatch(m.dataset.match);if(d){project.lines=project.lines.filter(l=>l.id!==d.dataset.delete);renderStats();renderLines();changed();}if(detail){const l=project.lines.find(l=>l.id===detail.dataset.detailLine);if(l?.rate)showDetail(l.rate,l.id);}};
@@ -401,6 +437,7 @@ for(const [id,label,redo] of [['undoProject','되살리기',false],['redoProject
 document.addEventListener('keydown',e=>{if(!e.ctrlKey||e.altKey)return;const key=e.key.toLowerCase();if(!['z','y'].includes(key))return;const editing=e.target.closest('input,textarea,[contenteditable=true]');if(editing&&!editing.closest('#estimateTable,#chargeTable'))return;if(document.querySelector('dialog:modal'))return;e.preventDefault();travelHistory(key==='y'||e.shiftKey);});
 const quantityImporter=setupQuantityImport({getProject:()=>project,busy,idle,toast,commit:next=>{project=validateProject(next);group='';selectedLineId=null;propose(false);switchView('estimate');render();changed();}});
 function addBoundaryRow(id,direction){
+ activateEntry(id);
  const result=insertBoundaryLine(project.lines,id,direction);if(!result)return null;
  project.lines=result.lines;selectedLineId=result.line.id;$('statusFilter').value='';
  if($('matchDialog').open)$('matchDialog').close();
@@ -453,3 +490,12 @@ async function receiveProjectLaunch(){
  finally{setTimeout(receiveProjectLaunch,1000);}
 }
 if(storage.runtime)receiveProjectLaunch();
+if(!project.lines.length&&!document.querySelector('dialog[open]'))$('estimateTable').querySelector('[data-field="name"]')?.focus({preventScroll:true});
+
+window.addEventListener('resize',()=>{
+ if(!project.lines.length){
+  const field=document.activeElement?.dataset.field;
+  renderLines();
+  if(field)$('estimateTable').querySelector('[data-field="'+field+'"]')?.focus({preventScroll:true});
+ }
+});

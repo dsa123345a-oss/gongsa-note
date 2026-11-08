@@ -104,6 +104,7 @@ export function applyAutoLinks(project,rows,batchId){
   const before=structuredClone(line),rate=structuredClone(match.rate);
   if(rate.resourcePricing?.master&&!next.resourcePriceLibrary)next.resourcePriceLibrary={id:rate.resourcePricing.masterId,name:rate.resourcePricing.master};
   const result={...line,name:rate.name,spec:rate.spec||'',unit:rate.unit||'',rate,status:rate.resourcePricing?.ready===false?'proposed':'confirmed',factor:1,autoMatch:{batchId,reviewed:false,reason:match.reason,score:match.score,before}};
+  if(line.dbReference?.state==='unresolved'&&line.dbReference.target===null)result.note=(line.note||'').split(' / ').filter(part=>part!=='수량산출서에서 DB 품목 미선택 · 직접 확인 후 연결').join(' / ');
   amount(result);return result;
  });return next;
 }
