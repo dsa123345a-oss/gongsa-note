@@ -1,4 +1,4 @@
-import {amount,totals,defaultCharges,bidPercent,norm,unitNorm} from './calc.js';
+import {amount,totals,bidPercent,norm,unitNorm} from './calc.js';
 import {validateCalculationMode,aggregateCalculation,manualCalculation} from './calculation-modes.js';
 import {editableAssembly} from './est-edit.js';
 import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';

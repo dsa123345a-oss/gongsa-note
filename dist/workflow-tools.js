@@ -1,7 +1,6 @@
 import {applyEmergencySurcharges} from './emergency-surcharges.js';
 import {addSurcharge} from './line-adjustments.js';
 import {recordCostBasis} from './workflow-core.js';
-import {totals} from './calc.js';
 export function setupWorkflowTools(api){
  const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=n=>Number(n).toLocaleString('ko-KR');
  const options=(items,value)=>Object.entries(items).map(([k,v])=>`<option value="${k}" ${k===value?'selected':''}>${v}</option>`).join('');

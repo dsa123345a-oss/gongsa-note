@@ -11,7 +11,7 @@ import {startBlankSession,createCloseController,askSaveBeforeClose,createSavedPr
 import {loadDefaultDatabases} from './default-databases.js';
 import {upgradeRegisteredLibraryMetadata} from './library-metadata-upgrade.js';
 import {hydrateEstProjectMetadata,restoreEstProjectLibrary} from './est-metadata.js';
-import {createResourcePricer,resourceLibrary,resourcePricingMessage} from './resource-pricing.js';
+import {createResourcePricer,resourcePricingMessage} from './resource-pricing.js';
 import {setupResourcePricing} from './resource-pricing-ui.js';
 import {setupPriceUpdate} from './price-update-ui.js';
 import {setupQuantityImport} from './quantity-import-ui.js';
@@ -27,7 +27,7 @@ import {estimateGrid} from './estimate-grid.js';
 import {setupGridKeyboard,insertBoundaryLine} from './grid-keyboard.js';
 import {setupRowSelection} from './row-selection.js';
 import {editBlock} from './work-core.js';
-import {setupLevels,hierarchyView,quantityHierarchy,appendQuantitySection} from './levels.js';
+import {setupLevels,hierarchyView} from './levels.js';
 import {setupDesktopToolbar} from './desktop-toolbar.js';
 import {setupAutoLink,pendingAuto,planAutoLinks,preferredLibrary} from './auto-link.js';
 import {setupWorkflowTools} from './workflow-tools.js';
@@ -36,7 +36,6 @@ import {setupAdvancedTools} from './advanced-tools.js';
 import {synchronizeLinkedCosts} from './calc.js';
 import {setupMappedImport} from './mapped-import-ui.js';
 import {quoteDetails} from './reference-details.js';
-import {calculationModes,aggregateCalculation} from './calculation-modes.js';
 import {setupUpdates} from './updates.js';
 import {setupWorkTools} from './work-tools.js';
 import {setupQuotes} from './quotes.js';
@@ -52,19 +51,16 @@ import {importEst} from './est.js';
 import {importEstProject} from './est-project.js';
 import {showEstImportReport} from './est-project-ui.js';
 import {setupOriginalEst} from './original-est.js';
-import {norm,unitNorm,cleanNumber,amount,totals,suggest,defaultCharges,bidPercent,appliedRate} from './calc.js';
-import {readWorkbook,extractQuantities} from './workbook.js';
-import {exportEvidenceEstimate} from './evidence-estimate.js';
+import {norm,unitNorm,cleanNumber,amount,totals,defaultCharges,bidPercent,appliedRate} from './calc.js';
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>n==null?'—':displayNumber.format(Number(n));
 const money=n=>n==null?'—':displayMoney.format(Number(n));
-const bases={labor:'직접노무비',totalLabor:'직접+간접 노무비',laborMaterial:'직접노무비+직접재료비',totalLaborMaterial:'전체 노무비+직접재료비',health:'앞선 건강보험료',direct:'직접공사비',net:'직접공사비+앞선 제경비',profitBase:'노무비+경비+앞선 제경비',contractBeforeVat:'직접공사비+앞선 제경비+폐기물',government:'관급자재대',fixed:'정액 입력'};
 let entryLines=[];
 const entryLine={id:'new-estimate-entry',name:'',spec:'',unit:'',qty:1,group:'',bucket:'direct',status:'unmatched',rate:null,factor:1,exclude:false,source:'직접 입력'};
 const newState=()=>({schema:1,title:'',location:'',quantityFile:'',lines:[],charges:defaultCharges(),ratesReviewed:false,mappings:{}});
 let rowSelection=null;
 let selectedLineId=null,workTools=null,workspaceWindows=null,evidenceWorkspace=null,projectHistory=null,selectedCostKey=null;
-let project=newState(),libraries=[],view='estimate',group='',page=0,activeLine=null,chosenRate=null,pendingSheets=[],pendingQuantity='',detailIndex=[],saveTimer,priceUpdatePending=null;
+let project=newState(),libraries=[],view='estimate',group='',activeLine=null,chosenRate=null,detailIndex=[],saveTimer,priceUpdatePending=null;
 const savedProject=createSavedProjectState(project);
 let storage;try{storage=await createStorage();}catch(e){document.body.innerHTML='<main><h1>작업 자료를 열지 못했습니다.</h1><p>원본 자료를 보존했습니다. 프로그램을 다시 실행해주세요.</p></main>';throw e;}
 let loadedOK=false,changeVersion=0;
@@ -317,7 +313,7 @@ function beginEntry(event){
 }
 for(const type of ['input','change','click'])$('estimateTable').addEventListener(type,beginEntry,true);
 $('estimateTable').oninput=e=>{const input=e.target.closest('[data-field="qty"],[data-separate-price]'),row=e.target.closest('[data-id]');if(!input||!row)return;const l=project.lines.find(l=>l.id===row.dataset.id),previous=l.qty,previousRate=l.rate,isPrice=input.hasAttribute('data-separate-price');try{if(isPrice){if(input.value==='')return;Object.assign(l,setSeparateUnitPrice(l,input.value));}else{l.qty=input.value===''?null:cleanNumber(input.value);if(l.qty!=null&&l.qty<0&&!l.deduction)l.qty=null;}const a=amount(l);renderStats();if(isPrice){const rate=appliedRate(l);row.querySelectorAll('[data-unit-cost-key]').forEach(cell=>cell.textContent=num(rate[cell.dataset.unitCostKey]));}row.querySelectorAll('.cost-cell').forEach(cell=>cell.textContent=a?money(a[cell.dataset.costKey]):'—');row.querySelector('.line-total').textContent=a?money(a.total):'미확정';row.classList.toggle('unconfirmed-row',!a);const h=hierarchyTotals(project.lines);for(const tr of $('estimateTable').querySelectorAll('.heading-row')){const value=h.get(tr.dataset.id);if(value){tr.querySelectorAll('[data-cost-key]').forEach(cell=>cell.textContent=money(value[cell.dataset.costKey]));tr.querySelector('[data-heading-total]').textContent=money(value.total);tr.querySelector('[data-heading-note]').textContent=`L${value.level} 공종 소계${value.missing?' · 미확정 '+value.missing+'건':''}`;}}for(const b of $('projectTree').querySelectorAll('[data-scroll-id]')){const small=b.querySelector('small'),value=h.get(b.dataset.scrollId);if(small&&value)small.textContent=money(value.total);}for(const b of $('projectTree').querySelectorAll('[data-group]')){const small=b.querySelector('small');if(small){const t=totals(project.lines.filter(l=>l.group===b.dataset.group),[]);small.textContent=money(t.direct+t.government+t.waste+t.fees);}}changed();}catch(error){l.qty=previous;l.rate=previousRate;input.value=isPrice?previousRate?.total??0:previous??'';toast(error.message);}};
-$('estimateTable').onchange=e=>{if(e.target.matches('[data-separate-price]')){const id=e.target.closest('[data-id]').dataset.id;try{project.lines=project.lines.map(l=>l.id===id?setSeparateUnitPrice(l,e.target.value):l);renderLines(renderStats());changed();}catch(error){toast(error.message);}return;}const input=e.target.closest('[data-field]'),row=e.target.closest('[data-id]');if(!input||!row)return;const l=project.lines.find(l=>l.id===row.dataset.id),f=input.dataset.field;if(f==='qty')return;if(f==='include')l.exclude=!input.checked;else if(f==='level'){const n=Number(input.value);l.level=Number.isInteger(n)&&n>=0&&n<=9?n:0;if(l.level>=2)l.headingScope='direct';}else if(f==='qty'){l.qty=input.value===''?null:cleanNumber(input.value);if(l.level!=null&&(!Number.isInteger(l.level)||l.level<0||l.level>9))throw Error('공종 레벨은 0부터 9까지입니다.');if(l.qty!=null&&l.qty<0){toast('수량은 0 이상이어야 합니다.');l.qty=null;}}else{l[f]=input.value;if(l.level&&f==='bucket')l.costScope=input.value;if(l.autoHeading==='project'&&f==='name'){project.title=l.name;$('projectTitle').value=l.name;$('desktopProjectTitle').value=l.name;}if(['name','spec','unit'].includes(f)&&!l.manualSeparate){l.status='unmatched';l.rate=null;delete l.autoMatch;}}renderLines(renderStats());changed();};
+$('estimateTable').onchange=e=>{if(e.target.matches('[data-separate-price]')){const id=e.target.closest('[data-id]').dataset.id;try{project.lines=project.lines.map(l=>l.id===id?setSeparateUnitPrice(l,e.target.value):l);renderLines(renderStats());changed();}catch(error){toast(error.message);}return;}const input=e.target.closest('[data-field]'),row=e.target.closest('[data-id]');if(!input||!row)return;const l=project.lines.find(l=>l.id===row.dataset.id),f=input.dataset.field;if(f==='qty')return;if(f==='include')l.exclude=!input.checked;else if(f==='level'){const n=Number(input.value);l.level=Number.isInteger(n)&&n>=0&&n<=9?n:0;if(l.level>=2)l.headingScope='direct';}else{l[f]=input.value;if(l.level&&f==='bucket')l.costScope=input.value;if(l.autoHeading==='project'&&f==='name'){project.title=l.name;$('projectTitle').value=l.name;$('desktopProjectTitle').value=l.name;}if(['name','spec','unit'].includes(f)&&!l.manualSeparate){l.status='unmatched';l.rate=null;delete l.autoMatch;}}renderLines(renderStats());changed();};
 $('estimateTable').onclick=e=>{if(e.target.closest('[data-open-cost-summary]')){switchView('summary');return;}if(e.target.closest('[data-add-separate]')){try{const result=addSeparateCost(project,$('estimateTable').querySelector('[data-separate-kind]').value,$('estimateTable').querySelector('[data-separate-section]').value);project=result.project;selectedLineId=result.line.id;group='';$('statusFilter').value='';renderLines(renderStats());changed();const input=$('estimateTable').querySelector(`tr[data-id="${selectedLineId}"] [data-separate-price]`);input?.scrollIntoView({block:'center'});input?.focus();input?.select();}catch(error){toast(error.message);}return;}const fold=e.target.closest('[data-fold]');if(fold){const l=project.lines.find(l=>l.id===fold.dataset.fold);l.collapsed=!l.collapsed;renderLines();changed();return;}const tr=e.target.closest('[data-id]');if(tr&&!rowSelection){selectedLineId=tr.dataset.id;$('deleteLine').disabled=false;if($('matchDialog').open&&activeLine?.id!==selectedLineId)openMatch(selectedLineId);$('estimateTable').querySelectorAll('[data-id]').forEach(r=>r.classList.toggle('selected-line',r.dataset.id===selectedLineId));}const copy=e.target.closest('[data-copy]'),up=e.target.closest('[data-move-up]'),down=e.target.closest('[data-move-down]');if(copy||up||down){const id=copy?.dataset.copy||up?.dataset.moveUp||down?.dataset.moveDown,idx=project.lines.findIndex(l=>l.id===id);if(copy)project.lines.splice(idx+1,0,{...structuredClone(project.lines[idx]),id:crypto.randomUUID()});else{const dest=idx+(up?-1:1);if(dest>=0&&dest<project.lines.length)[project.lines[idx],project.lines[dest]]=[project.lines[dest],project.lines[idx]];}renderLines(renderStats());changed();return;}const m=e.target.closest('[data-match]'),d=e.target.closest('[data-delete]'),detail=e.target.closest('[data-detail-line]');if(m)openMatch(m.dataset.match);if(d){project.lines=project.lines.filter(l=>l.id!==d.dataset.delete);renderLines(renderStats());changed();}if(detail){const l=project.lines.find(l=>l.id===detail.dataset.detailLine);if(l?.rate)showDetail(l.rate,l.id);}};
 $('suggestBtn').onclick=()=>autoLink.open();$('reviewAuto').onclick=()=>autoLink.review();
 $('addLine').onclick=()=>{
@@ -407,7 +403,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-resource]'
 document.addEventListener('keydown',e=>{if(e.key==='F9'){e.preventDefault();$('recalcBtn').click();}if(e.key==='F12'&&$('detailDialog').open){e.preventDefault();$('detailDialog').close();}});
 $('estimateTable').ondblclick=e=>{const id=e.target.closest('[data-id]')?.dataset.id,l=project.lines.find(l=>l.id===id);if(l?.rate&&!e.target.closest('input,select,button'))showDetail(l.rate,l.id);};
 
-const estActions=setupEstActions({getProject:()=>project,getLibraries:()=>libraries,getGroup:()=>group,getSelected:()=>selectedLineId,commit:()=>{render();changed();},toast});
+setupEstActions({getProject:()=>project,getLibraries:()=>libraries,getGroup:()=>group,getSelected:()=>selectedLineId,commit:()=>{render();changed();},toast});
 document.addEventListener('click',e=>{if(e.shiftKey||e.ctrlKey||e.metaKey)return;const b=e.target.closest('[data-bid-line]');if(b){selectedLineId=b.dataset.bidLine;$('bidBtn').click();$('bidScope').value='line';$('bidScope').dispatchEvent(new Event('change'));}});
 
 $('estToolsBtn').onclick=()=>$('estToolsDialog').showModal();

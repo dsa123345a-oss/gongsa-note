@@ -1,4 +1,3 @@
-import {TABLE_LABELS} from './est.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels={_record:'원본 행',Code:'코드',TitleCode:'상위 코드',Name:'품명 / 제목',Size:'규격',Unite:'단위',GN:'수량',TU:'합계 단가',TC:'합계 금액',NC:'노무 금액',GC:'재료 금액',JC:'경비 금액',NU:'노무 단가',GU:'재료 단가',JU:'경비 단가',LineData:'원문 / 산식',Bigo:'비고',Level:'단계',Index:'순서',Cost1:'단가1',Cost2:'단가2',Cost3:'단가3'};
 export function setupRaw(getLibraries,download){

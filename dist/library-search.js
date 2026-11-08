@@ -1,5 +1,5 @@
 import {norm} from './calc.js';
-import {nameNorm,textSimilarity,compareSpecs,specNorm,locationTextNorm,transportRoute,compatibleWork,compatibleUnits,pipeWork} from './match-similarity.js';
+import {nameNorm,compareSpecs,specNorm,locationTextNorm,transportRoute,compatibleWork,pipeWork} from './match-similarity.js';
 
 // Cache text processing, not prices or calculations. Check all inputs used by
 // search on every call, including in-place edits and same-length DB replacement.
@@ -41,13 +41,10 @@ function searchGroups(libraries,query,category,libraryId,requestIndexes=new Map(
    if(!result){
     const source=index.entries.filter(e=>!category||e.category===category);
     const exact=source.filter(e=>terms.every((term,i)=>e.text.includes(term)||e.specKey===termSpecs[i]||e.route.includes(termPlaces[i]))).sort((a,b)=>Number(b.plain===queryPlain)-Number(a.plain===queryPlain));
-    if(!terms.length)result={items:exact.map(e=>e.item),related:false};
-    else {
      const related=korean.length>=4?source.filter(e=>e.plain.includes(korean)):[],seen=new Set([...exact,...related]);
      const fuzzy=queryName.text.length>=3?source.filter(e=>!seen.has(e)).map(e=>({entry:e,score:similarity(queryName,e.name)})).filter(e=>e.score>=.48).map(e=>({...e,spec:compareSpecs(query,e.entry.spec).score})).sort((a,b)=>b.score-a.score||b.spec-a.spec).map(e=>e.entry):[];
      const matched=new Set(exact),items=[...exact,...related.filter(e=>!matched.has(e)),...fuzzy].map(e=>e.item);
      result={items,related:!exact.length&&items.length>0,exactCount:exact.length};
-    }
     remember(index.search,key,result);
    }
    return {library,...result,items:result.items.slice()};

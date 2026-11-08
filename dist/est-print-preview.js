@@ -1,5 +1,5 @@
 import {printTypography,printRowHeight,measurePrintText} from './print-typography.js';
-import {makePrintDocuments,buildPrintPages,estPrintSettings,printDocuments,printPageSvg,printPagesHtml,printVectorCss} from './est-print.js';
+import {makePrintDocuments,buildPrintPages,estPrintSettings,printPageSvg,printPagesHtml,printVectorCss} from './est-print.js';
 import {collectEvidence} from './project-data.js';
 import {pdfFileName} from './project-labels.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

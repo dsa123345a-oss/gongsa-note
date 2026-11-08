@@ -1,4 +1,4 @@
-import {amount,truncateProduct,bidPercent} from './calc.js';
+import {amount,bidPercent} from './calc.js';
 import {aggregateCalculation,manualCalculation} from './calculation-modes.js';
 export const adjustmentKeys=['labor','material','expense','other'];
 export function scopeRange(lines,index,level){

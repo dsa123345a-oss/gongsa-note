@@ -1,5 +1,5 @@
 import {addRateBand} from './rate-policy.js';
-import {totals,synchronizeLinkedCosts} from './calc.js';
+import {synchronizeLinkedCosts} from './calc.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function setupAdvancedTools(api){
  const $=id=>document.getElementById(id),p=api.getProject;

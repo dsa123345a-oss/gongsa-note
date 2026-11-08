@@ -30,7 +30,7 @@ export function buildPriceEvidence(project,libraries=[],baseStyles=contractorTem
   const s=sheets[node.sheet],r=node.rate,vars={},partRows=[],contributing=[];
   const componentLabel={labor:'노무비',material:'재료비',expense:'경비',other:'기타'}[r.sourceComponent];
   add(s,[node.id,r.code||'',r.name||'',r.spec||'',r.unit||'','','','','','','','','','','',(r.priceReference?.source||r.source||'직접 입력')+(r.evidenceBid?' · 근거 낙찰 '+r.evidenceBid.percent+'%':'')+(componentLabel?' · '+componentLabel+'만 계상':'')],'header');
-  const uses=[...node.uses].map(x=>x.replace(/\s\[[^\]]+\]$/,'')).join(' / ');const use=add(s,['','','사용 위치','','','','','','','','','','','','',uses]);
+  const uses=[...node.uses].map(x=>x.replace(/\s\[[^\]]+\]$/,'')).join(' / ');add(s,['','','사용 위치','','','','','','','','','','','','',uses]);
   if(node.issues.length){const n=add(s,['','','확인 필요','','','','','','','','','','','','',node.issues.join(' / ')]);s.rows[n-1].height=Math.max(s.rows[n-1].height,45);}
   if(node.sheet>=2){
    const n=s.rows.length+1,v=[node.id,r.code||'','적용 기초단가',r.spec||'',r.unit||'','',...money(r),'','','','',f(`SUM(G${n}:J${n})`,r.total||money(r).reduce((a,b)=>a+b,0)),r.priceReference?.source||r.source||'직접 입력'];

@@ -8,7 +8,7 @@ import {cleanNumber,amount,totals,chargeBaseLabels,bidPercent} from './calc.js';
 import {recalculateMissingWorkbook,shiftSharedFormula} from './workbook-formulas.js';
 import {readQuantityContracts,attachQuantityContracts} from './quantity-contract.js';
 import {workConnectionJoints} from './work-connection-joints.js';
-const enc=new TextEncoder(),dec=new TextDecoder();
+const dec=new TextDecoder();
 const parse=b=>{const d=new DOMParser().parseFromString(typeof b==='string'?b:dec.decode(b),'application/xml');if(d.querySelector('parsererror'))throw Error('엑셀 XML을 읽을 수 없습니다.');return d;};
 const all=(e,n)=>Array.from(e.getElementsByTagNameNS('*',n));
 const text=(e,n)=>all(e,n)[0]?.textContent??'';

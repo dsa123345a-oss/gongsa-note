@@ -1,7 +1,6 @@
 const displayNumber = new Intl.NumberFormat('ko-KR',{maximumFractionDigits:6});
 import {hasProjectWork} from './session-lifecycle.js';
 import {setupEstPrintPreview} from './est-print-preview.js';
-import {costSheet} from './cost-sheet.js';
 import {repeatableContractTarget} from './cost-edit.js';
 import {paginatePrint,paginatedCss} from './print-pagination.js';
 import {applyEvidenceBid} from './evidence-bid.js';
@@ -11,7 +10,7 @@ import {calculationModes,manualCalculation,manualAmounts} from './calculation-mo
 import {haulFormula,propagateResource,editBlock,copyProjectLines,procurementFee,reverseContract,safetyComparison,machineryRate,marketRate,findUsage,resourceReport,scheduleRows,validateSchedule} from './work-core.js';
 import {printPack,printCss,printSections,escapeHtml as esc} from './print-pack.js';
 import {validateProject,rateIdentity,collectEvidence} from './project-data.js';
-import {totals,amount,norm,truncateQuotient,truncateProduct} from './calc.js';
+import {totals,amount} from './calc.js';
 import {buildXlsx} from './workbook.js';
 import {searchLibraries} from './library-search.js';
 
