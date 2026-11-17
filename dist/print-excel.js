@@ -67,7 +67,7 @@ export function vectorPrintExcelSheets(project,libraries=[],options={}){
      // The preview already fits/wraps the cell and determines its row height.
      // Recalculating a multiline font here made the same header/body smaller
      // only in Excel (e.g. the two-line 노무비 header was 10.14 instead of 11.5).
-     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(source.header?grid.size+1:grid.size),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!numeric&&!percent,shrink:false,numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
+     for(let k=start;k<start+span;k++)ids[k]=style({size:cell.fontSize||(source.header?grid.size+1:grid.size),bold:source.bold,align:source.header?'center':cell.distribute&&String(cell.value).length<=8?'distributed':cell.align,wrap:multiline&&!numeric&&!percent,shrink:numeric||percent,numeric,percent,formatCode,border:{...(k===start?{left:start===0?'thin':'hair'}:{}),...(k===n-1?{right:'thin'}:{}),...(ri===0?{top:'thin'}:{}),...(horizontal&&rowspan===1?{bottom:source.subtotal?'thin':'hair'}:{}),...(ri===gridRows.length-1?{bottom:'thin'}:{})}});
      if(rowspan===2){
       // The next header row supplies the bottom edge of a vertically merged cell.
       // Its blank value is retained and no overlapping merge is generated.

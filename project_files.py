@@ -4,6 +4,7 @@ import base64
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -12,8 +13,8 @@ import zipfile
 from collections import deque
 
 
-def safe_name(value):
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(value)).strip(' .')[:120] or '새 내역서'
+def safe_name(value, limit=120):
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(value)).strip(' .')[:limit] or '새 내역서'
 
 
 def project_filename(value):
@@ -24,11 +25,11 @@ def project_filename(value):
 
 def excel_filename(value):
     name = re.sub(r'(?i)\.xlsx?$', '', str(value).strip(' .'))
-    return safe_name(name) + '.xlsx'
+    return safe_name(name, limit=200) + '.xlsx'
 
 
 def pdf_filename(value):
-    return safe_name(re.sub(r'(?i)\.pdf$', '', str(value).strip(' .'))) + '.pdf'
+    return safe_name(re.sub(r'(?i)\.pdf$', '', str(value).strip(' .')), limit=200) + '.pdf'
 
 
 def atomic_project_write(path, project):
@@ -58,6 +59,29 @@ class ProjectFiles:
         self.open_queue = deque()
         self.lock = threading.Lock()
         self.dialog = dialog or self.native_dialog
+        try:
+            locations = json.loads(self.store.get('fileLocations')) or {}
+            self.last_save_directory = locations.get('lastSaveDirectory')
+        except (ValueError, AttributeError, TypeError):
+            self.last_save_directory = None
+
+    def save_directory(self):
+        for folder in (self.last_save_directory, self.current.parent if self.current else None, self.home):
+            if folder:
+                try:
+                    if Path(folder).is_dir():
+                        return Path(folder)
+                except (OSError, TypeError, ValueError):
+                    pass
+        return self.home
+
+    def remember_save(self, target):
+        # A cancelled/failed write must not replace the last successful folder.
+        self.last_save_directory = str(target.resolve().parent)
+        try:
+            self.store.put('fileLocations', json.dumps({'lastSaveDirectory': self.last_save_directory}, ensure_ascii=False))
+        except Exception:
+            logging.exception('File saved, but could not remember its directory')
 
     def native_dialog(self, mode, directory, filename=''):
         import webview
@@ -126,7 +150,7 @@ class ProjectFiles:
                     except zipfile.BadZipFile as exc:
                         raise ValueError('엑셀 통합 문서 형식이 아닙니다.') from exc
                 filename = pdf_filename if format == 'pdf' else excel_filename
-                paths = self.dialog('pdf' if format == 'pdf' else 'excel', self.current.parent if self.current else self.home,
+                paths = self.dialog('pdf' if format == 'pdf' else 'excel', self.save_directory(),
                                     filename(payload.get('name') or '내역서'))
                 if not paths:
                     return {'cancelled': True}
@@ -135,6 +159,7 @@ class ProjectFiles:
                 if target != selected and target.exists():
                     raise ValueError('같은 이름의 .' + format + ' 파일이 있습니다. 저장창에서 해당 파일을 선택하거나 다른 이름을 입력하세요.')
                 atomic_bytes_write(target, data)
+                self.remember_save(target)
                 return {'saved': True, 'name': target.name, 'path': str(target)}
             if action == 'next':
                 return self.selected_file(self.open_queue.popleft()) if self.open_queue else {'empty': True}
@@ -160,7 +185,7 @@ class ProjectFiles:
                 target = self.current
                 if payload.get('saveAs') or target is None or target.suffix.lower() != '.gongsa':
                     name = project_filename(payload.get('name') or (target.name if target else '새 내역서'))
-                    paths = self.dialog('save', target.parent if target else self.home, name)
+                    paths = self.dialog('save', self.save_directory(), name)
                     if not paths:
                         return {'cancelled': True}
                     target = Path(paths[0] if isinstance(paths, (tuple, list)) else paths)
@@ -170,5 +195,6 @@ class ProjectFiles:
                     target = normalized
                 atomic_project_write(target, payload.get('project'))
                 self.current = target
+                self.remember_save(target)
                 return {'saved': True, 'name': target.name, 'path': str(target)}
             raise ValueError('지원하지 않는 파일 작업입니다.')

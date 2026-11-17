@@ -4,7 +4,7 @@ export function setupDesktopToolbar(){
  const action=(label,id)=>`<button type="button" data-command="${id}">${label}</button>`;
  const view=(label,id)=>`<button type="button" data-work-view="${id}">${label}</button>`;
  const menus=[
-  ['파일',action('저장하기','saveProject')+action('다른 이름으로 저장','saveProjectAs')+action('새 내역서','newProject')+action('작업 열기','openProject')+action('수량산출서 가져오기','quantityInput')+'<hr>'+action('엑셀 내보내기','exportBtn')+action('미리보기','printTool')+action('인쇄','printSelectedTool')],
+  ['파일',action('저장하기','saveProject')+action('다른 이름으로 저장','saveProjectAs')+action('새 내역서','newProject')+action('작업 열기','openProject')+action('수량산출서 가져오기','quantityInput')+'<hr>'+action('엑셀 내보내기','exportBtn')+action('원가·세부내역 PDF 다운로드','downloadEstimatePdfTool')+action('미리보기','printTool')+action('인쇄','printSelectedTool')],
   ['편집',action('행 추가','addLine')+action('선택 행 복사','copySelectedLines')+action('선택 행 삭제','deleteLine')+action('공종 추가','addHeading')+action('블록 선택 · 일괄 편집','blockTool')+action('되살리기　Ctrl+Z','undoProject')+action('다시 실행　Ctrl+Y','redoProject')],
   ['LEVEL',action('선택 행 레벨 지정','levelTool')+action('공종명으로 소계 만들기','groupLevelTool')+action('공종 모두 접기','collapseLevels')+action('모두 펼치기','expandLevels')],
   ['단가',action('단가 업데이트','priceUpdateBtn')+action('자동 연결','suggestBtn')+action('자동 연결 검토','reviewAuto')+action('여러 단가 추가','batchTool')+action('연결 단가 다시 읽기','refreshRatesBtn')+action('새 일위대가','newAssemblyBtn')+action('새 단가산출','newFormulaBtn')],
@@ -28,7 +28,7 @@ export function setupDesktopToolbar(){
  for(const [category,key] of [['노임','labor'],['자재','material'],['장비','machine'],['단가산출','unit'],['일위대가','assembly']]){const b=bar.querySelector(`[data-resource="${category}"]`);decorate(b,b.textContent,key);}
  const make=(label,key,attrs)=>{const b=document.createElement('button');b.type='button';b.className='button';for(const [k,v] of Object.entries(attrs))b.setAttribute(k,v);decorate(b,label,key);return b;};
  const db=$('mainDbBtn');bar.prepend(make('수량산출서 가져오기','quantity',{'data-command':'quantityInput','id':'quantityImportButton'}));bar.insertBefore(make('연결','link',{'data-command':'suggestBtn'}),db);bar.insertBefore(make('내역서','document',{'data-work-view':'estimate'}),db);bar.insertBefore(make('원가','sum',{'data-work-view':'summary'}),db);
- for(const [label,key,id] of [['미리보기','document','printTool'],['인쇄','document','printSelectedTool'],['삽입','quantity','addLine'],['삭제','document','deleteLine'],['되살리기','link','undoProject'],['단가업데이트','db','priceUpdateBtn']])bar.insertBefore(make(label,key,{'data-command':id}),db);
+ for(const [label,key,id] of [['미리보기','document','printTool'],['인쇄','document','printSelectedTool'],['원가·세부내역 PDF','document','downloadEstimatePdfTool'],['삽입','quantity','addLine'],['삭제','document','deleteLine'],['되살리기','link','undoProject'],['단가업데이트','db','priceUpdateBtn']])bar.insertBefore(make(label,key,{'data-command':id}),db);
  decorate(db,'메인 DB','db');decorate($('bidBtn'),'낙찰률','bid');decorate($('estToolsBtn'),'작업도구','tools');
  const close=()=>nav.querySelectorAll('details[open]').forEach(d=>d.open=false);
  nav.addEventListener('click',e=>{const summary=e.target.closest('summary');if(summary){for(const d of nav.querySelectorAll('details[open]'))if(d!==summary.parentElement)d.open=false;}else if(e.target.closest('button'))close();});

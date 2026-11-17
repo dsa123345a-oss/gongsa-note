@@ -24,6 +24,7 @@ import {setupEstLayout} from './est-layout.js';
 import {setupEvidenceWorkspace,evidenceContent} from './evidence-workspace.js';
 import {collectPriceEvidence} from './price-evidence.js';
 import {estimateGrid} from './estimate-grid.js';
+import {setupGridReadability} from './grid-readability.js';
 import {setupGridKeyboard,insertBoundaryLine} from './grid-keyboard.js';
 import {setupRowSelection} from './row-selection.js';
 import {editBlock} from './work-core.js';
@@ -450,10 +451,7 @@ workspaceWindows=setupWorkspaceWindows();
 evidenceWorkspace=setupEvidenceWorkspace({getProject:()=>project,getLibraries:()=>libraries,getSelected:()=>selectedLineId,closeWindows:()=>workspaceWindows.closeAll(),goToLine:id=>{group='';selectedLineId=id;switchView('estimate');renderLines();document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({block:'center'});},edit:(node,line)=>{selectedLineId=line.id;if(node.verified&&node.calc&&!line.rate.evidenceBid)assemblyEditor.open({...line.rate,components:node.parts,calculation:node.calculation},null,{lineId:line.id,identity:rateIdentity(line.rate)});else showDetail(line.rate,line.id);}});
 
 
-function fitHeadingRows(){for(const el of $('estimateTable').querySelectorAll('textarea.heading-name,textarea.grid-group')){el.style.height='0px';el.style.height=Math.max(30,el.scrollHeight+2)+'px';}}
-new ResizeObserver(fitHeadingRows).observe($('estimateTable'));
-new MutationObserver(fitHeadingRows).observe($('estimateTable'),{childList:true,subtree:true});
-$('estimateTable').addEventListener('input',e=>{if(e.target.matches('textarea.heading-name,textarea.grid-group'))fitHeadingRows();});
+setupGridReadability($('estimateTable'));
 let fileDragDepth=0;
 const draggedFiles=e=>Array.from(e.dataTransfer?.types||[]).includes('Files');
 document.addEventListener('dragenter',e=>{if(draggedFiles(e)){e.preventDefault();fileDragDepth++;document.body.classList.add('quantity-dragging');}});

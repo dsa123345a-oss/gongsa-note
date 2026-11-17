@@ -12,7 +12,7 @@ export function createProjectFiles(api){
    const name=(project.title||'새 내역서')+'.gongsa';
    if(api.desktop)return request('save',{project,name,saveAs});
    if(!globalThis.showSaveFilePicker){api.download(JSON.stringify(project,null,2),name,'application/json');return {saved:true,name};}
-   try{const target=saveAs||!handle?await showSaveFilePicker({suggestedName:name,types:[{description:'공사노트',accept:{'application/json':['.gongsa']}}]}):handle;const writer=await target.createWritable();await writer.write(JSON.stringify(project,null,2));await writer.close();handle=target;return {saved:true,name:handle.name};}catch(e){if(e.name==='AbortError')return {cancelled:true};throw e;}
+   try{const target=saveAs||!handle?await showSaveFilePicker({id:'gongsa-save',suggestedName:name,types:[{description:'공사노트',accept:{'application/json':['.gongsa']}}]}):handle;const writer=await target.createWritable();await writer.write(JSON.stringify(project,null,2));await writer.close();handle=target;return {saved:true,name:handle.name};}catch(e){if(e.name==='AbortError')return {cancelled:true};throw e;}
   },
   async open(){
    if(!api.desktop)return null;

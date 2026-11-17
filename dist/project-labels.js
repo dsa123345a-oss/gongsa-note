@@ -22,11 +22,12 @@ export function emergencyBundleTitle(base,site){
  const title=String(base||'상수도긴급보수공사').trim();
  return /^상수도\s*긴급\s*보수\s*공사$/.test(title)&&site?`${title}(${site} 등)`:title;
 }
-export function workbookFileName(title){
+function documentBaseName(title){
  const safe=String(title||'설계내역서').trim().replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/,'').slice(0,150)||'설계내역서';
- return safe+'(내역서).xlsx';
+ return safe;
 }
-export const pdfFileName=title=>workbookFileName(title).replace(/\.xlsx$/,'.pdf');
+export const workbookFileName=title=>documentBaseName(title)+'(낙찰률적용).xlsx';
+export const pdfFileName=(title,document='내역서')=>documentBaseName(title)+'('+documentBaseName(document)+').pdf';
 export function renameProject(project,title){
  const next=structuredClone(project);next.title=String(title).trim();
  for(const line of next.lines)if(line.autoHeading==='project')line.name=next.title||'공사명';

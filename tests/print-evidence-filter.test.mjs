@@ -1,3 +1,4 @@
+import {nativeCellStyles} from '../dist/native-print-layout.js';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {collectPrintEvidence} from '../dist/print-evidence.js';
 import {collectPriceEvidence} from '../dist/price-evidence.js';
@@ -46,7 +47,7 @@ test('비목별 장비는 한 대로 출력하되 사용한 비목과 자원만 
 test('EST 엑셀의 글꼴·행높이·열너비·제목·숫자 서식을 보존한다',()=>{
  const p=project([line(labor())]),b=printExcelSheets(p,[],{sections:['summary','groups','estimate','labor']});
  for(const [i,s]of b.sheets.slice(0,3).entries()){
-  assert.deepEqual(s.columns,estExcelTemplate.sheets[i].columns);assert.deepEqual(s.rows.slice(0,s.header.length),s.header);assert.equal(s.shapes.length,0);
+  const columns=structuredClone(estExcelTemplate.sheets[i].columns);if(i===0)columns[6].width=7.5;assert.deepEqual(s.columns,columns);assert.deepEqual(s.rows.slice(0,s.header.length),s.header);assert.equal(s.shapes.length,0);
   assert.ok(s.rows.every(r=>r.styles.every(id=>Number.isInteger(id))));
  }
  const count=Number(b.styles.match(/<cellXfs count="(\d+)"/)[1]),inner=b.styles.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/)[1];
@@ -73,7 +74,7 @@ test('미리보기와 엑셀은 같은 셀 모델·글자 크기·행 배치·�
  assert.deepEqual(sheet.rowBreaks,pages.slice(1).map(p=>p.grid.rows.find(r=>!r.header).sheetRow));
  for(const page of pages)for(const row of page.grid.rows){
   assert.ok(Math.abs(row.height-sheet.rows[row.sheetRow].height*.967*sheet.print.scale/100)<.000001);
-  for(const c of row.cells)if(!row.header&&c.value)assert.ok(Math.abs(c.fontSize-11*sheet.print.scale/100)<.000001);
+  for(const c of row.cells)if(!row.header&&c.value){assert.ok(c.fontSize<=11*sheet.print.scale/100+.000001);assert.ok(Math.abs(c.fontSize-nativeCellStyles(b.styles)[sheet.rows[row.sheetRow].styles[c.nativeColumn]].size*sheet.print.scale/100)<.000001);}
  }
  assert.ok(pages.length>2);assert.equal(b.bundle.totals.grand,totals(p.lines,p.charges).grand);
 });

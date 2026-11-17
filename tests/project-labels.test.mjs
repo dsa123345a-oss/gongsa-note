@@ -21,7 +21,7 @@ test('공구 이름은 공통 접두어만 제거하고 원본·고유 괄호·�
  assert.equal(sectionCaption({name:'특수 공사(야간)'}),'특수 공사(야간)');
  assert.equal(sectionCaption({name:'상수도 긴급 보수공사(12공구 시험 현장)'}),'시험 현장');
  const renamed=renameProject(p,'수정 공사명');assert.equal(renamed.title,'수정 공사명');assert.equal(renamed.lines[0].name,p.lines[0].name);
- assert.equal(workbookFileName(renamed.title),'수정 공사명(내역서).xlsx');assert.equal(workbookFileName('A/B:공사'),'A_B_공사(내역서).xlsx');
+ assert.equal(workbookFileName(renamed.title),'수정 공사명(낙찰률적용).xlsx');assert.equal(workbookFileName('A/B:공사'),'A_B_공사(낙찰률적용).xlsx');
  assert.equal(pdfFileName(renamed.title),'수정 공사명(내역서).pdf');assert.equal(pdfFileName('A/B:공사'),'A_B_공사(내역서).pdf');
 });
 test('내역에 없는 수수료·원인자부담금 행을 만들지 않고 존재하는 항목만 한 줄씩 표시한다',()=>{

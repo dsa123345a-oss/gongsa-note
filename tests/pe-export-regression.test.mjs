@@ -44,13 +44,13 @@ test('기본 세 시트는 EST 엑셀 양식을 쓰고 미리보기 옵션과 �
  const coordinate=s=>{const m=s.match(/^([A-Z]+)(\d+)$/);return [Number(m[2]),[...m[1]].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0)];};
  for(const sheet of result.sheets){const used=new Set();for(const merge of sheet.merges){const [a,b]=merge.split(':').map(coordinate);for(let r=a[0];r<=b[0];r++)for(let c=a[1];c<=b[1];c++){const id=r+':'+c;assert.ok(!used.has(id),sheet.name+' '+merge);used.add(id);}}}
 });
-test('긴 품명·규격은 한 줄 축소하고 엑셀은 페이지 나누기 보기로 저장한다',async()=>{
+test('긴 품명·규격은 읽을 수 있게 행을 늘리고 엑셀은 페이지 나누기 보기로 저장한다',async()=>{
  const p=project();p.lines=[{...p.lines[0],name:'긴 품명 '.repeat(12),spec:'D20 / 조임식 '.repeat(8)}];
  const result=printExcelSheets(p,[],{sections:['estimate']});
- for(const page of result.pages)for(const row of page.grid.rows)for(const cell of row.cells)assert.equal(cell.lines.length,1);
- assert.ok(result.sheets[0].rows.flatMap(r=>r.values).includes(p.lines[0].name));
+ for(const text of [p.lines[0].name,p.lines[0].spec]){const cell=result.pages.flatMap(p=>p.grid.rows).flatMap(r=>r.cells).find(c=>c.lines.join('')===text);assert.ok(cell);assert.ok(cell.lines.length>1);assert.ok(cell.fontSize>=7.5*result.sheets[0].print.scale/100);}
+ assert.ok(result.sheets[0].rows.flatMap(r=>r.values).some(v=>String(v).replaceAll('\n','')===p.lines[0].name));
  assert.equal(result.sheets[0].view,'pageBreakPreview');
  const zip=await unzip(exportPrintExcel(p,[],{sections:['estimate']})),xml=new TextDecoder().decode(await zip.read('xl/worksheets/sheet1.xml'));
  assert.match(xml,/view="pageBreakPreview"/);assert.match(xml,/showGridLines="1"/);
- const styles=new TextDecoder().decode(await zip.read('xl/styles.xml'));assert.doesNotMatch(styles,/wrapText="1"/);assert.match(styles,/shrinkToFit="1"/);
+ const styles=new TextDecoder().decode(await zip.read('xl/styles.xml'));assert.match(styles,/wrapText="1"/);assert.match(styles,/shrinkToFit="1"/);
 });

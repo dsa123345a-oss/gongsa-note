@@ -169,3 +169,8 @@ body.quantity-dragging::after{content:'수량산출서를 여기에 놓으세요
  #summaryWindow .cost-sheet tr.cost-no-print td{color:#66717d}
  .surcharge-bid-label{font-size:12px;color:#345971;white-space:normal;line-height:1.4}
 }
+/* Long labels remain editable and visible instead of hiding beyond an input. */
+#estimateTable .est-grid textarea.cell-name,#estimateTable .est-grid textarea.cell-spec{box-sizing:border-box;display:block;min-height:25px;max-height:none;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;resize:none;font-family:inherit;color:inherit}
+#estimateTable .est-grid textarea.cell-input:focus{background:#fff8c8!important;outline:1px solid #476b91;outline-offset:-1px}
+#estimateTable .est-grid .cell-quantity input{box-sizing:border-box;min-width:73px;max-width:none;appearance:textfield}
+#estimateTable .est-grid .cell-quantity input::-webkit-inner-spin-button,#estimateTable .est-grid .cell-quantity input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}

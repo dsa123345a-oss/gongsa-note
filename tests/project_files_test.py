@@ -17,8 +17,12 @@ class Files(unittest.TestCase):
         self.choices = []
         self.calls = []
         class Store:
+            def __init__(self):
+                self.data = {'workbench': '{"projects":[]}'}
             def get(self, key):
-                return '{"projects":[]}'
+                return self.data.get(key, 'null')
+            def put(self, key, value):
+                self.data[key] = value
         def choose(*args):
             self.calls.append(args)
             return self.choices.pop(0)
@@ -128,6 +132,7 @@ class Files(unittest.TestCase):
         self.assertEqual(self.files.current, project)
         self.assertEqual(excel_filename('한글.XLSX'), '한글.xlsx')
         self.assertTrue(excel_filename('가'*200+'.xlsx').endswith('.xlsx'))
+        self.assertTrue(excel_filename('가'*150+'(낙찰률적용).xlsx').endswith('(낙찰률적용).xlsx'))
 
     def test_excel_normalized_existing_file_is_not_silently_overwritten(self):
         target = self.home/'기존.xlsx'
@@ -166,6 +171,33 @@ class Files(unittest.TestCase):
             self.files.command('export', {**payload, 'data': self.workbook_payload()['data']})
         with self.assertRaises(ValueError):
             self.files.command('export', {**payload, 'format': 'exe'})
+
+    def test_last_successful_folder_shared_by_project_excel_pdf_and_restart(self):
+        a, b = self.home/'공사 A', self.home/'공사 B'
+        a.mkdir(); b.mkdir()
+        self.choices.append([str(a/'작업.gongsa')])
+        self.files.command('save', {'project': self.project})
+        self.choices.append([str(b/'엑셀.xlsx')])
+        self.files.command('export', self.workbook_payload())
+        self.assertEqual(self.calls[-1][1], a)
+        self.files.command('reset', {})
+        self.files = ProjectFiles(None, self.files.store, self.home, self.files.dialog)
+        pdf = {'name': '통합.pdf', 'format': 'pdf', 'data': base64.b64encode(b'%PDF-1.7\n%%EOF').decode()}
+        self.choices.append(None)
+        self.assertTrue(self.files.command('export', pdf)['cancelled'])
+        self.assertEqual(self.calls[-1][1], b)
+        self.choices.append([str(a/'실패.pdf')])
+        with patch('project_files.os.replace', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError): self.files.command('export', pdf)
+        self.assertEqual(self.files.save_directory(), b)
+        self.choices.append([str(a/'통합.pdf')])
+        self.files.command('export', pdf)
+        self.assertEqual(self.calls[-1][1], b)
+        self.choices.append([str(a/'다음.gongsa')])
+        self.files.command('save', {'project': self.project, 'saveAs': True})
+        self.assertEqual(self.calls[-1][1], a)
+        self.files.last_save_directory = str(self.home/'사라진 폴더')
+        self.assertEqual(self.files.save_directory(), a)
 
 
 if __name__ == '__main__':

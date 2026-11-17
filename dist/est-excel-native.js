@@ -72,7 +72,11 @@ export function nativeEstimateSheets(project,bundle){
   const cells=structuredClone(r.cells);
   // L2 project titles use the blank specification, quantity and unit cells.
   // Keep the work-section number and every monetary column separate.
-  if(kind==='root'&&cells[1]?.span===2&&cells[2]?.value===''&&cells[3]?.value===''){cells[1].span=4;cells.splice(2,2);}
+  if(r.sectionStart&&cells[1]){
+   let span=cells[1].span||1,count=0;
+   while(span<4&&cells[2+count]?.value===''&&span+(cells[2+count].span||1)<=4){span+=cells[2+count].span||1;count++;}
+   if(count){cells[1].span=span;cells.splice(2,count);}
+  }
   for(const c of cells){const span=c.span||1;out.values[column]=cellValue(c);
    if(typeof out.values[column]==='number')out.styles[column]=format(out.styles[column],Number.isInteger(out.values[column])?'#,##0;-#,##0;;@':'#,##0.0########;-#,##0.0########;;@');
    if(c.keepFont||c.readable||column===2||column===3||column===sheet.columns.length-1)out.styles[column]=format(out.styles[column],'General',{shrink:!c.keepFont});

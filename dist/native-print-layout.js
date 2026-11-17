@@ -33,7 +33,7 @@ export function layoutNativeSheet(input,styles,doc,options={}){
  // a user-selected portrait page from splitting the table horizontally.
  p.scale=Math.min(p.scale,Math.floor((width-(p.left+p.right)*72)/rawCols.reduce((a,b)=>a+b,0)*100));
  const headerCount=sheet.header.length,formats=nativeCellStyles(styles),merges=sheet.merges.map(m=>{const[a,b]=m.split(':').map(coord);return {a,b};});
- if(d.rowHeight!=null)for(let r=headerCount;r<sheet.rows.length;r++)sheet.rows[r].height=String(sheet.rows[r].values[2]||'').includes('\n')?Math.max(sheet.rows[r].height,d.rowHeight*mm):d.rowHeight*mm;
+ if(d.rowHeight!=null)for(let r=headerCount;r<sheet.rows.length;r++)sheet.rows[r].height=sheet.rows[r].values.some(v=>String(v??'').includes('\n'))?Math.max(sheet.rows[r].height,d.rowHeight*mm):d.rowHeight*mm;
  // Cost statements stay together. The same scale is written to Excel; reserve
  // a small physical margin for printer rounding without dropping any row.
  if(doc.key==='summary')p.scale=Math.min(p.scale,Math.floor((height-(p.top+p.bottom)*72-6)/(sheet.rows.reduce((s,r)=>s+r.height,0)*.967)*100));
@@ -103,22 +103,35 @@ export function prepareNativeSheets(native,options={}){
    let id=xfs.indexOf(xf);if(id<0){id=xfs.length;xfs.push(xf);}r.styles[2]=id;
   }
  }
+ // Give percentage and long quantity values readable room before fitting.
+ // These widths are shared by Excel, preview and PDF, never the stored values.
+ for(const sheet of result.sheets){
+  if(sheet.name==='원가계산서')sheet.columns[6].width=Math.max(sheet.columns[6].width,7.5);
+  else{
+   let width=sheet.columns[4].width;
+   for(const r of sheet.rows.slice(sheet.header.length))if(typeof r.values[4]==='number'){
+    const text=String(r.values[4]),chars=text.length+Math.floor(text.split('.')[0].length/3);
+    width=Math.max(width,(chars*3.5+8)/5.25);
+   }
+   sheet.columns[4].width=width;
+  }
+ }
  // Resolve each shrink-to-fit cell after captions and custom font sizes have
  // been prepared. Keep the typed values and number formats, only specialize
- // the font style. Excel must not perform a second, renderer-specific shrink.
+ // the font style. Numeric cells retain shrink as a font/printer fallback.
  const current=xml.replace(/<fonts\b[^>]*>[\s\S]*?<\/fonts>/,`<fonts count="${fonts.length}">${fonts.join('')}</fonts>`).replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/,`<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>`),formats=nativeCellStyles(current),fitted=new Map();
  for(const sheet of result.sheets){
   const merges=sheet.merges.map(m=>{const[a,b]=m.split(':').map(coord);return {a,b};});
   for(const [ri,r] of sheet.rows.entries())for(let c=0;c<r.values.length;c++){
-   const oldId=r.styles[c],style=formats[oldId];if(!style?.shrink)continue;
+   const oldId=r.styles[c],style=formats[oldId],numeric=typeof r.values[c]==='number';if(!style||(!style.shrink&&!numeric))continue;
    const merge=merges.find(m=>ri>=m.a.r&&ri<=m.b.r&&c>=m.a.c&&c<=m.b.c);if(merge&&(merge.a.r!==ri||merge.a.c!==c))continue;
-   const span=merge?merge.b.c-merge.a.c+1:1,width=sheet.columns.slice(c,c+span).reduce((sum,col)=>sum+col.width*5.52,0)-4;
-   let size=fitPrintFontSize(shown(r.values[c],style.format).split('\n'),style.size,width);const wrap=size<6&&sheet.name!=='원가계산서'&&ri>=sheet.header.length&&c===sheet.columns.length-1;
-   if(wrap){size=Math.min(6,style.size);const lines=wrapPrintText(r.values[c],size,width);r.values[c]=lines.join('\n');r.height=Math.max(r.height,(lines.length*size*1.15+4)/.967);}
-   const sig=oldId+':'+size+':'+wrap;
+   const span=merge?merge.b.c-merge.a.c+1:1,width=sheet.columns.slice(c,c+span).reduce((sum,col)=>sum+col.width*5.25,0)-7;
+   let size=fitPrintFontSize(shown(r.values[c],style.format).split('\n'),style.size,width);const bodyText=!numeric&&ri>=sheet.header.length,caption=bodyText&&(sheet.name==='원가계산서'?c===3:c===2||c===3),minimum=caption?7.5:6,wrap=bodyText&&size<minimum&&(caption||c===sheet.columns.length-1);
+   if(wrap){size=Math.min(minimum,style.size);const lines=wrapPrintText(r.values[c],size,width);r.values[c]=lines.join('\n');r.height=Math.max(r.height,(lines.length*size*1.15+4)/.967);}
+   const sig=oldId+':'+size+':'+wrap+':'+numeric;
    if(!fitted.has(sig)){
     const old=xfs[oldId],font=fonts[Number(attr(old,'fontId',0))].replace(/<sz val="[^"]*"\/>/,`<sz val="${size}"/>`);let fi=fonts.indexOf(font);if(fi<0){fi=fonts.length;fonts.push(font);}
-    let xf=old.replace(/fontId="\d+"/,`fontId="${fi}"`).replace(/shrinkToFit="[^"]*"/g,'shrinkToFit="0"');if(wrap)xf=xf.replace(/<alignment\b([^>]*?)\/>/,(_,a)=>`<alignment${a.replace(/ wrapText="[^"]*"/g,'')} wrapText="1"/>`);let id=xfs.indexOf(xf);if(id<0){id=xfs.length;xfs.push(xf);}fitted.set(sig,id);
+    let xf=old.replace(/fontId="\d+"/,`fontId="${fi}"`).replace(/shrinkToFit="[^"]*"/g,'shrinkToFit="0"');if(numeric){xf=xf.replace(/<alignment\b([^>]*?)\/>/,(_,a)=>`<alignment${a.replace(/ (shrinkToFit|wrapText)="[^"]*"/g,'')} shrinkToFit="1"/>`);if(!/<alignment\b/.test(xf))xf=xf.replace(/\/>$/,'><alignment shrinkToFit="1"/></xf>');}if(wrap)xf=xf.replace(/<alignment\b([^>]*?)\/>/,(_,a)=>`<alignment${a.replace(/ wrapText="[^"]*"/g,'')} wrapText="1"/>`);let id=xfs.indexOf(xf);if(id<0){id=xfs.length;xfs.push(xf);}fitted.set(sig,id);
    }
    r.styles[c]=fitted.get(sig);
   }

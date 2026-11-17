@@ -49,7 +49,7 @@ test('선택한 증빙이 모두 비어 있으면 빈 엑셀을 생성하지 않
  }
 });
 
-test('긴 한글 품명·규격·공사명과 금액은 동일 pt로 맞추고 엑셀 재축소 없이 페이지를 보존한다',()=>{
+test('긴 한글 품명·규격·공사명과 금액은 동일 pt로 맞추고 숫자 안전 축소와 페이지를 보존한다',()=>{
  const title='2026년 상수도 긴급 보수공사 및 급수관 교체 구간 '.repeat(6),name='수도용 내충격성 경질 폴리염화비닐 급수관 연결 부속',spec='D=25㎜, 45° 엘보 × 2개, 압력 1.0MPa, 현장 설치 포함',remark='원본 비고: 운반비 포함, 접합부 상세도 및 설치 근거 참조';
  const project={schema:1,title,charges:defaultCharges(),lines:[{id:'section',level:2,name:'구간별 공사명 '.repeat(12),sectionLabel:'1공구',bucket:'direct'},...Array.from({length:46},(_,i)=>({id:'material-'+i,name:name+' '+i,spec,unit:'개',qty:2.5,bucket:'direct',status:'confirmed',rate:{code:'M'+i,category:'자재',source:'검증 DB',name:name+' '+i,spec,unit:'개',remark,labor:0,material:123456789.25,expense:0,other:0,total:123456789.25,prices:[123456789.25],quotePages:['p.123']}}))]};
  const before=JSON.stringify(project),out=printExcelSheets(project,[],{sections:['estimate','materials'],printSettings:{startPage:11}}),formats=nativeCellStyles(out.styles);
@@ -73,7 +73,7 @@ test('긴 한글 품명·규격·공사명과 금액은 동일 pt로 맞추고 �
     for(const c of source.cells){
      const index=page.native?c.nativeColumn:col,style=formats[row.styles[index]],scale=page.native?sheet.print.scale/100:1;
      assert.ok(Math.abs(style.size*scale-c.fontSize)<1e-8,'확정된 실제 pt 공유');
-     assert.equal(style.shrink,false,'엑셀 엔진 재축소 차단');
+     assert.equal(style.shrink,typeof row.values[index]==='number','숫자 셀만 Excel 글꼴·프린터 차이의 안전 축소 허용');
      if(c.value&&c.fontSize<(page.native?9*scale:10.5))shrunk++;
      if(typeof row.values[index]==='number')typed++;
      col+=c.span||1;
