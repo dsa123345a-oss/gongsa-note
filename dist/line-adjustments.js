@@ -63,6 +63,15 @@ export function resolveLineAdjustments(input){
  }
  return {lines,warnings};
 }
+// Reuse the persisted exclusion flag so every total and output agrees.
+export function setSurchargesEnabled(project,enabled,id=null){
+ if(typeof enabled!=='boolean')throw Error('할증 적용 상태를 확인하세요.');
+ const next=structuredClone(project),rows=next.lines.filter(l=>!l.level&&l.surcharge&&(id===null||l.id===id));
+ if(id!==null&&!rows.length)throw Error('변경할 할증 행을 찾지 못했습니다.');
+ for(const line of rows)line.exclude=!enabled;
+ if(rows.length)next.ratesReviewed=false;
+ return next;
+}
 export function addSurcharge(project,selectedId,settings){
  const next=structuredClone(project),existing=next.lines.find(l=>l.id===selectedId&&l.surcharge);
  let index=next.lines.findIndex(l=>l.id===selectedId);if(index<0)throw Error('할증을 넣을 공종 또는 공구의 행을 선택하세요.');
