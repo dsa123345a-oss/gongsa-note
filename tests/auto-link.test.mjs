@@ -11,8 +11,9 @@ test('같은 품명의 다른 관경보다 일치 규격을 우선하며 다른 
  assert.equal(rows[0].rate.id,'right');assert.equal(rows[0].rate.source,'추가 DB');assert.equal(rows[0].exact,true);
  assert.equal(planAutoLinks(p,[lib([rate({spec:'D100'})]),lib([rate({source:'추가 DB'})],'extra')],'main')[0].rate.source,'10월 메인');
 });
-test('단위 오표기는 DB 기준으로 고치고 무관한 품명은 자동 연결하지 않는다',()=>{
+test('정확히 같은 품목은 DB 단위를 보여주고 무관한 품명은 연결하지 않는다',()=>{
  const rows=planAutoLinks(project([line()]),[lib([rate({unit:'m'}),rate({name:'모래부설'})])]);assert.equal(rows[0].rate.unit,'m');
+ assert.equal(rows[0].blocked,false);assert.match(rows[0].reason,/DB 단위 m 적용/);
  assert.equal(planAutoLinks(project([line()]),[lib([rate({name:'모래부설'})])])[0].rate,undefined);
 });
 test('자동 연결은 원본을 보관하고 수량·낙찰률을 유지하며 이름·규격을 복사한다',()=>{
@@ -55,7 +56,7 @@ test('1순위 DB에 다른 관경만 있으면 요청 관경이 있는 메인을
  assert.equal(planAutoLinks(p,libs)[0].rate.id,'rate1');
 });
 
-test('1순위 DB의 후보가 없거나 금액이 잘못되면 다른 DB를 사용하되 단위 차이는 허용한다',()=>{
+test('1순위 DB의 후보가 없거나 금액이 잘못되면 다른 DB를 사용하며 같은 품목은 DB 단위로 유지한다',()=>{
  for(const item of [rate({name:'모래부설'}),rate({total:NaN})]){
   const row=planAutoLinks(project([line()]),[lib([item]),lib([rate({id:'fallback',source:'추가 DB'})],'extra')],'','main')[0];
   assert.equal(row.rate.id,'fallback');assert.match(row.reason,/다른 DB에서 찾음/);

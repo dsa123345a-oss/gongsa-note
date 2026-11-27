@@ -17,7 +17,7 @@ import {searchLibraries} from './library-search.js';
 export function setupWorkTools(api){
  const $=id=>document.getElementById(id),p=api.getProject,libs=api.getLibraries,n=v=>displayNumber.format(Number(v||0));
  document.body.insertAdjacentHTML('beforeend',`<dialog id="workDialog"><div class="dialog-head"><div><h2 id="workTitle"></h2><p id="workSubtitle"></p></div><button class="icon-btn" data-close="workDialog" aria-label="닫기">×</button></div><div id="workBody"></div><div class="dialog-actions" id="workFooter"></div></dialog><section id="printSurface" hidden></section>`);
- const buttons={folderImportTool:'폴더의 EST 자료 한 번에 추가',mappedImportTool:'엑셀 열 지정 가져오기',evidenceBidTool:'근거자료 낙찰 · 원단가 복원',calculationTool:'계산 방식 · 금액 직접 입력',blockTool:'블록 선택 · 일괄 편집',batchTool:'여러 단가 한 번에 추가',usageTool:'데이터 사용 위치',resourceTool:'동원인원 · 자재 · 장비',propagateTool:'편집 단가를 연결 근거에 반영',machineTool:'기계경비 작성',haulTool:'운반거리 · 작업량 산식',marketTool:'표준시장단가 작성',costTool:'원가 조정 · 요율 양식',documentsTool:'설명서 · 예정공정',printTool:'미리보기',printSelectedTool:'인쇄',downloadEstimatePdfTool:'원가·세부내역 PDF 다운로드',preferencesTool:'화면 설정',coverageTool:'참고자료별 구현 범위',undoWorkTool:'도구 작업 되돌리기'};
+ const buttons={folderImportTool:'폴더의 EST 자료 한 번에 추가',mappedImportTool:'엑셀 열 지정 가져오기',evidenceBidTool:'근거자료 낙찰 · 원단가 복원',calculationTool:'계산 방식 · 금액 직접 입력',blockTool:'블록 선택 · 일괄 편집',batchTool:'여러 단가 한 번에 추가',usageTool:'데이터 사용 위치',resourceTool:'동원인원 · 자재 · 장비',propagateTool:'편집 단가를 연결 근거에 반영',machineTool:'기계경비 작성',haulTool:'운반거리 · 작업량 산식',marketTool:'표준시장단가 작성',costTool:'원가 조정 · 요율 양식',documentsTool:'설명서 · 예정공정',printTool:'미리보기',printSelectedTool:'인쇄',downloadEstimatePdfTool:'전체 내역 PDF 다운로드',preferencesTool:'화면 설정',coverageTool:'참고자료별 구현 범위',undoWorkTool:'도구 작업 되돌리기'};
  $('estToolsDialog').querySelector('.tool-menu').insertAdjacentHTML('beforeend',Object.entries(buttons).map(([id,t])=>`<button class="button" id="${id}">${t}</button>`).join(''));
  let archive={projects:[],templates:[],printStyles:[]},ready=api.storage.get('workbench').then(v=>{if(v){if(!Array.isArray(v.projects)||!Array.isArray(v.templates)||!Array.isArray(v.printStyles))throw Error('공사 보관함 형식을 확인하세요.');archive=v;}}),undo=null,undoAfter=null;
  const saveArchive=()=>api.storage.put('workbench',archive);
@@ -76,7 +76,7 @@ export function setupWorkTools(api){
  async function reverseCost(){
   await ready;const before=snapshot(),t=totals(before.lines,before.charges),adjustment=before.charges.find(c=>c.key==='profit')?.adjustment;
   open('도급액 역산 · 자리수',`현재 도급액 ${n(t.contract)}원 · 관급·수수료 제외`,
-   `<div class="work-fields">${select('reverseUnit','자리수',{'1':'0자리 · 1원','10':'1자리 · 10원','100':'2자리 · 100원','1000':'3자리 · 1,000원','10000':'4자리 · 10,000원','100000':'5자리 · 100,000원','1000000':'6자리 · 1,000,000원'})}${select('reverseRounding','처리 방식',{floor:'절사',round:'반올림',ceil:'절상'})}${input('reverseTarget','목표 도급액',repeatableContractTarget(t.contract,10000,'floor',adjustment),'number')}</div><p class="notice">적용하면 목표 도급액에 맞춰 이윤을 조정합니다. 목표액은 직접 수정할 수 있습니다. 비목별 원 단위 절사에 따라 목표액과 차이가 날 수 있습니다.</p>`,
+   `<div class="work-fields">${select('reverseUnit','자리수',{'1':'0자리 · 1원','10':'1자리 · 10원','100':'2자리 · 100원','1000':'3자리 · 1,000원','10000':'4자리 · 10,000원','100000':'5자리 · 100,000원','1000000':'6자리 · 1,000,000원'})}${select('reverseRounding','처리 방식',{floor:'절사',round:'반올림',ceil:'절상'})}${input('reverseTarget','목표 도급액',repeatableContractTarget(t.contract,10000,'floor',adjustment),'number')}</div><p class="notice">적용하면 목표 도급액에 맞춰 이윤을 조정합니다. 목표액은 직접 수정할 수 있습니다. 부가세 10% 원가표는 EST 원본과 같이 역산에 필요한 1원 차이를 부가세 원 단위에서 정리합니다.</p>`,
    button('reverseCancel','취소')+button('costApply','적용',true));
   $('reverseUnit').value='10000';$('reverseRounding').value='floor';
   const update=()=>{$('reverseTarget').value=repeatableContractTarget(t.contract,Number(read('reverseUnit')),read('reverseRounding'),adjustment);message('');};
@@ -85,7 +85,7 @@ export function setupWorkTools(api){
   bind('costApply',()=>{
    if(t.missing)throw Error('미연결 단가·수량을 확인한 뒤 역산하세요.');
    const r=reverseContract(before,Number(read('reverseTarget')));r.project.ratesReviewed=false;
-   commit(r.project,`도급액 ${n(r.actual)}원으로 적용했습니다.${r.difference?` 원 단위 절사 차액 ${n(r.difference)}원.`:``}`);$('workDialog').close();
+   commit(r.project,`도급액 ${n(r.actual)}원으로 적용했습니다.${r.vatRounding?` EST 방식 부가세 원 단위 정리 +1원(세율 10%).`:r.difference?` 원 단위 절사 차액 ${n(r.difference)}원.`:``}`);$('workDialog').close();
   });
  }
  async function cost(initialTab='costFeeTab'){if(initialTab==='costReverseTab')return reverseCost();await ready;const before=snapshot(),t=totals(before.lines,before.charges);let pending=null;open('원가 조정 · 요율 양식','현재 공사의 입력값으로 계산합니다. 요율과 적용 대상은 자동으로 법정 기준을 판정하지 않습니다.',`<div class="work-tabs">${button('costFeeTab','조달수수료')}${button('costReverseTab','도급액 역산')}${button('costFixedTab','제경비 금액 고정')}${button('costSafetyTab','안전관리비 비교')}${button('costTemplateTab','원가 요율 양식')}</div><div id="costBody"></div><p id="costResult" class="notice"></p>`,button('costApply','검토한 변경 적용',true));

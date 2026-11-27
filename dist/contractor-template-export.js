@@ -88,6 +88,7 @@ export function contractorTemplateSheets(input,{libraries=[],includeEvidence=fal
    if(c.key==='profit'&&c.adjustment?.original?.base==='profitBase'){const baseValue=t.labor+t.expense+t.other+t.charges.slice(0,i).reduce((n,x)=>n+x.amount,0);row.values[6]=f(`IFERROR(F${chargeRows.get(i)}/(${bases.profitBase}),0)`,baseValue?c.amount/baseValue:0);row.percentFormat='0.00%';row.values[7]='(B + C + E) · 자리맞춤';}
   }
   else {row.values[5]=f(`TRUNC(ROUND((${bases[c.base]||'0'})*G${chargeRows.get(i)},8),0)`,c.amount);row.values[6]=c.rate?c.rate/100:'';row.percentFormat='0'+(String(c.rate).includes('.')?'.'+'0'.repeat(String(c.rate).split('.')[1].length):'')+'%';row.values[7]=c.rate?({labor:'4',totalLabor:'B',laborMaterial:'(A + 4)',totalLaborMaterial:'(A + B)',health:'9',direct:'(A + 4 + 6)',net:'D',profitBase:'(B + C + E)',contractBeforeVat:'(G + H)',government:'관급자재'}[c.base]||'기준금액')+' × '+c.rate/100:'';}
+  if(c.reverseVatRounding){const v=c.reverseVatRounding;row.values[5].formula+=`+IF(AND((${bases[c.base]})=${v.base},G${chargeRows.get(i)}=0.1),1,0)`;}
  }
  for(const code of ['A','B','C','D','G','J','K']){const n=codeRows.get(code);cost.rows[n-1].values[7]=({A:'(1 + 2 + 3 )',B:'( 4 + 5 )',C:`(6:${expenseNumber-1})`,D:'(A + B + C)',G:'(D + E + F)',J:'(G + H + I)',K:'(J)'})[code];}
  const footer=[...ids('indirect'),...expenseIds].filter(i=>t.charges[i].amount!==0).map(i=>({i}));footer.push({code:'D',name:'순공사원가'},...ids('management').map(i=>({i})),...ids('profit').map(i=>({i})),{code:'G',name:'총원가'},{code:'J',name:'도급예정액'},{code:'K',name:'총공사비'});

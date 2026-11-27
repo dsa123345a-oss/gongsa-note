@@ -47,7 +47,9 @@ export function nativeEstimateSheets(project,bundle){
  };
  const byKey=Object.fromEntries(bundle.documents.map(d=>[d.key,d]));
  const sheets=structuredClone(estExcelTemplate.sheets);
- for(const s of sheets){s.rows=structuredClone(s.header);s.view='pageBreakPreview';s.shapes=[];s.rowBreaks=[];
+ for(const s of sheets){
+  if(bundle.reviewLabel)s.header[0].values[1]+=' [검토용]';
+  s.rows=structuredClone(s.header);s.view='pageBreakPreview';s.shapes=[];s.rowBreaks=[];
   s.print.headerText='&L&"굴림체,Regular"&9'+String(project.title||'공사명').replaceAll('&','&&');
   s.print.footerText='&C&"굴림체,Regular"&9- &P -';
  }

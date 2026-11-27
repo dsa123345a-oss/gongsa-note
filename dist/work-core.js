@@ -1,6 +1,7 @@
 import {aggregateCalculation} from './calculation-modes.js';
 import {totals,synchronizeLinkedCosts,truncateProduct,truncateQuotient,norm,unitNorm} from './calc.js';
 import {originalProfitCharge} from './profit-adjustment.js';
+import {makeEstVatRounding} from './est-contract-rounding.js';
 import {scopeRange} from './line-adjustments.js';
 import {calculateAssemblyDetailed,costKeys} from './estimate-core.js';
 import {editableAssembly} from './est-edit.js';
@@ -57,8 +58,10 @@ export function reverseContract(project,target){
  const calc=x=>{p.charges[idx]={...limit,link:undefined,ruleSet:undefined,formula:undefined,base:'fixed',fixed:x};return totals(p.lines,p.charges).contract;};
  if(goal>original.contract||goal<calc(0))throw Error(`이윤 한도에서 가능한 도급액은 ${calc(0).toLocaleString('ko-KR')}~${original.contract.toLocaleString('ko-KR')}원입니다.`);
  let lo=0,hi=max;while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(calc(mid)<=goal)lo=mid;else hi=mid-1;}
- const actual=calc(lo);p.charges[idx].adjustment={original:limit,target:goal,actual,difference:goal-actual};p.ratesReviewed=false;
- return {project:validateProject(synchronizeLinkedCosts(p)),profit:lo,actual,difference:goal-actual,maximum:limit};
+ let actual=calc(lo);const adjustment=p.charges[idx].adjustment={original:limit,target:goal,actual,difference:goal-actual};
+ adjustment.vatRounding=makeEstVatRounding(p.charges,totals(p.lines,p.charges),lo,goal);
+ actual=totals(p.lines,p.charges).contract;adjustment.actual=actual;adjustment.difference=goal-actual;p.ratesReviewed=false;
+ return {project:validateProject(synchronizeLinkedCosts(p)),profit:lo,actual,difference:goal-actual,vatRounding:adjustment.vatRounding?1:0,maximum:limit};
 }
 export function safetyComparison(base,government,rate,addition,surcharge){
  const b=number(base,'대상액'),g=number(government,'관급 포함액'),r=number(rate,'요율'),a=number(addition,'기초액'),s=number(surcharge,'할증률');

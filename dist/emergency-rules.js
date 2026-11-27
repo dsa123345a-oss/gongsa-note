@@ -1,4 +1,5 @@
 const compact=value=>String(value||'').replace(/\s+/g,'');
+export const EMERGENCY_CONTRACT_LIMIT=5_000_000;
 export function emergencySurchargeRule(name){
  const text=compact(name).replace(/^[\d.\-()]+/,'');
  if(/^토공|^포장/.test(text))return {name:'기타할증',percent:50};

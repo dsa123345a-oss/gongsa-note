@@ -3,6 +3,10 @@ from pathlib import Path
 import json
 from PyInstaller.utils.hooks import collect_data_files
 
+# PyInstaller otherwise only warns about missing lazy imports and ships a broken PDF action.
+from reportlab.pdfgen import canvas as _pdf_canvas
+from reportlab.pdfbase import ttfonts as _pdf_fonts
+
 root = Path(SPECPATH)
 version = json.loads((root / 'release.json').read_text(encoding='utf-8'))['version']
 datas = [(str(root / 'dist'), 'dist'), (str(root / 'release.json'), '.')]
@@ -12,7 +16,7 @@ for entry in config.get('defaultDatabases', []):
 for package in ('webview', 'pythonnet', 'clr_loader', 'reportlab'):
     datas += collect_data_files(package)
 a = Analysis([str(root / 'desktop.py')], pathex=[str(root)], binaries=[], datas=datas,
-    hiddenimports=['webview.platforms.edgechromium'],
+    hiddenimports=['webview.platforms.edgechromium', 'reportlab.pdfgen.canvas', 'reportlab.pdfbase.ttfonts'],
     excludes=['PyQt5','PyQt6','PySide2','PySide6','matplotlib','pandas'], noarchive=True)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], name='공사노트', console=False, exclude_binaries=True,

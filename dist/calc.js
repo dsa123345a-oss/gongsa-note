@@ -1,4 +1,5 @@
 import {memoizeText} from './text-cache.js';
+import {makeEstVatRounding,estVatRoundingDelta} from './est-contract-rounding.js';
 import {selectRateRule} from './rate-policy.js';
 import {resolveLineAdjustments} from './line-adjustments.js';
 import {restoreEmergencySurcharges} from './emergency-rules.js';
@@ -57,7 +58,8 @@ function totalsCore(lines,charges){
   const entries=[];let cumulative=0;
   for(const c of charges){const indirect=entries.find(x=>x.key==='indirect')?.amount||0;const bases={direct:t.direct,labor:t.labor,totalLabor:t.labor+indirect,laborMaterial:t.labor+t.material,totalLaborMaterial:t.labor+indirect+t.material,health:entries.find(x=>x.key==='health')?.amount||0,net:t.direct+cumulative,profitBase:t.labor+t.expense+t.other+cumulative,contractBeforeVat:t.direct+cumulative+t.waste,government:t.government,fixed:0};
     const value=c.formula?evaluateCostFormula(c.formula,costReferences(t,entries,charges,entries.length)):c.base==='fixed'?truncateProduct(c.fixed||0):truncateProduct(bases[c.base]??0,c.rate||0,0.01);
-    entries.push({...c,baseValue:bases[c.base]??0,amount:value});cumulative+=value;
+    const delta=estVatRoundingDelta(charges,c,bases[c.base]??0,value);
+    entries.push({...c,baseValue:bases[c.base]??0,amount:value+delta,...(delta?{reverseVatRounding:{base:bases[c.base],delta:1}}:{})});cumulative+=value+delta;
   }
   const scope=charges.find(c=>c.estTotalScope)?.estTotalScope;
   const selected=keys=>t.separateGroups.filter(g=>keys.includes(g.key)).reduce((n,g)=>n+g.amount,0);
@@ -129,10 +131,13 @@ export function resolveLinkedCosts(lines,charges){
   const v=c.link,target=cleanNumber(v.target);if(target===null||target<0||!v.maximum||v.maximum.link)throw Error('목표 도급액 연동 설정을 확인하세요.');
   if(linkedCharges.slice(i+1).some(x=>x.key!=='vat'||x.base!=='contractBeforeVat'))throw Error('목표 도급액 자동 연동은 이윤 뒤에 부가가치세만 있는 원가 양식을 지원합니다.');
   const capCharges=linkedCharges.map((x,j)=>j===i?{...v.maximum,key:c.key}:x),cap=totalsCore(linkedLines,capCharges).charges[i].amount;
-  const value=x=>totalsCore(linkedLines,linkedCharges.map((a,j)=>j===i?{...a,formula:undefined,base:'fixed',fixed:x}:a)).contract;
+  const value=x=>totalsCore(linkedLines,linkedCharges.map((a,j)=>j===i?{...a,adjustment:undefined,formula:undefined,base:'fixed',fixed:x}:a)).contract;
   let lo=0,hi=Math.max(0,cap);if(target<value(0)||target>value(hi))warnings.push('목표 도급액에 맞출 수 없습니다. 현재 원가와 이윤 조정 범위를 확인하세요.');
   while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(value(mid)<=target)lo=mid;else hi=mid-1;}
   c.base='fixed';delete c.formula;c.fixed=lo;c.adjustment={...c.adjustment,target,actual:value(lo),difference:target-value(lo)};
+  delete c.adjustment.vatRounding;
+  c.adjustment.vatRounding=makeEstVatRounding(linkedCharges,totalsCore(linkedLines,linkedCharges),lo,target);
+  c.adjustment.actual=totalsCore(linkedLines,linkedCharges).contract;c.adjustment.difference=target-c.adjustment.actual;
  }
  return {lines:linkedLines,charges:linkedCharges,warnings};
 }

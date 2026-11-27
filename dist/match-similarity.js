@@ -59,7 +59,7 @@ export function compatibleUnits(line,item){
 }
 function materials(row){
  const s=(String(row.name||'')+' '+String(row.spec||'')).normalize('NFKC').toLowerCase().replace(/([a-z])\s*[.]\s*(?=[a-z])/g,'$1'),found=new Set();
- for(const m of s.matchAll(/(?:^|[^a-z])(cpvc|pvc|sts|sus|pfp|hdpe|ldpe|pe|xl|pb|pp)(?=$|[^a-z])/g))found.add(({sus:'sts',hdpe:'pe',ldpe:'pe'})[m[1]]||m[1]);
+ for(const m of s.matchAll(/(?:^|[^a-z])(cpvc|pvc|sts|sus|pfp|hdpe|ldpe|pe|xl|pb|pp|pm)(?=$|[^a-z])/g))found.add(({sus:'sts',hdpe:'pe',ldpe:'pe'})[m[1]]||m[1]);
  if(/스테인리스|스테인레스|스텐/.test(s))found.add('sts');
  if(/폴리에틸렌/.test(s))found.add('pe');
  if(/염화비닐/.test(s))found.add('pvc');
@@ -138,6 +138,7 @@ export function incompatibleWorkReason(line,item){
   const x=facility(nameNorm(line.spec)),y=facility(nameNorm(item.spec));if(x&&x!==y)return '안전시설의 종류가 다름';
  }
  if(cover(a)!==cover(b))return '본체와 뚜껑·덮개는 별도 품목';
+ for(const part of ['니플','부싱'])if(a.includes(part)!==b.includes(part))return '배관 부속의 종류가 다름';
  if(a.includes('소켓')!==b.includes('소켓'))return '소켓과 다른 부속은 별도 품목';
  if(a.includes('소켓')&&b.includes('소켓')){for(const part of ['밸브','새들'])if(a.includes(part)!==b.includes(part))return '소켓의 연결 용도가 다름';}
  if(a.includes('밸브')&&b.includes('밸브')&&((/볼밸브/.test(a)&&/제수밸브/.test(b))||(/제수밸브/.test(a)&&/볼밸브/.test(b))))return '밸브 종류가 다름';
@@ -160,4 +161,31 @@ export function incompatibleWorkReason(line,item){
 }
 export function compatibleWork(line,item){
  return !incompatibleWorkReason(line,item);
+}
+
+// A single diameter for a valve socket can describe both ends only when
+// both DB ports have that same nominal diameter.
+export function automaticSpecComparison(line,item){
+ const options={diameterAliases:pipeWork(line)&&pipeWork(item)};
+ const from=specNorm(line.spec),to=specNorm(item.spec);
+ if(/밸브소켓/.test(nameNorm(line.name))&&/밸브소켓/.test(nameNorm(item.name))&&
+    /^d\d+(?:\.\d+)?$/.test(from)&&/^d\d+(?:\.\d+)?xd\d+(?:\.\d+)?$/.test(to)){
+  return compareSpecs(from+'x'+from,to,options);
+ }
+ return compareSpecs(line.spec,item.spec,options);
+}
+
+export function automaticSpecIssue(line,item,comparison=automaticSpecComparison(line,item)){
+ if(comparison.mismatch)return '규격 수치 다름 · 직접 연결 필요';
+ if(comparison.missingNumbers)return 'DB 규격 수치 없음 · 직접 연결 필요';
+ // Quantity sheets sometimes carry a leftover unit from another row. Use
+ // the DB unit when the product is identified independently of that unit.
+ const identified=nameNorm(line.name)===nameNorm(item.name)&&
+  (specNorm(line.spec)===specNorm(item.spec)||comparison.numeric===1||wasteWork(line)||!!shortHaul(line));
+ if(!identified&&!compatibleUnits(line,item))return '수량 단위 호환 확인 필요 · 직접 연결 필요';
+ return '';
+}
+
+export function automaticRateMismatch(line,item){
+ return incompatibleWorkReason(line,item)||automaticSpecIssue(line,item);
 }

@@ -47,7 +47,9 @@ export function makePrintDocuments(project,libraries=[]){
  project=synchronizeLinkedCosts(project);
  const result={},t=totals(project.lines,project.charges),hier=hierarchyTotals(project.lines),graph=collectPrintEvidence(project,libraries),lines=project.lines.filter(l=>!l.exclude);
  if(t.warnings?.length)throw Error(t.warnings.join(' '));
- const add=(key,rows,widths,headers,extra={})=>result[key]={key,title:printDocuments[key],projectTitle:project.title||'공사명',singleLine:key!=='formulas',orientation:['summary','formulas'].includes(key)?'portrait':'landscape',rows,widths,headers:headers.map(r=>r.map(c=>typeof c==='object'?c:cell(c,'center'))),...extra};
+ const reviewLabel=t.missing?`검토용 · 미확정 ${t.missing}건 제외 부분합`:'';
+ const projectTitle=(reviewLabel?`[${reviewLabel}] `:'')+(project.title||'공사명');
+ const add=(key,rows,widths,headers,extra={})=>result[key]={key,title:printDocuments[key],projectTitle,singleLine:key!=='formulas',orientation:['summary','formulas'].includes(key)?'portrait':'landscape',rows,widths,headers:headers.map(r=>r.map(c=>typeof c==='object'?c:cell(c,'center'))),...extra};
  const cs=costSheet(project).rows.filter(r=>r.visible);
  const simpleBasis={materialSum:'(1 + 2 + 3)',laborSum:'(4 + 5)',expenseSum:'(6 : '+Math.max(6,...cs.filter(r=>r.group==='경비'&&/^\d+$/.test(r.code)).map(r=>Number(r.code)))+')',net:'(A + B + C)',beforeVat:'(D + E + F)',contract:'(G + H + I)',grand:cs.find(r=>r.id==='grand')?.basis||'(J + K)'};
  if(t.totalScope)simpleBasis.contract=cs.find(r=>r.id==='contract').basis;
@@ -112,7 +114,7 @@ export function makePrintDocuments(project,libraries=[]){
  const materialHeads=[[...['No','품 명','규 격','단위'].map(x=>cell(x,'center')),...['가격정보','물가자료','유통물가','물가정보','거래가격','견적가1'].map(x=>cell(x,'center',2)),cell('적용단가','center'),cell('비 고','center')],['','','','',...Array.from({length:6},()=>['단 가','page']).flat(),'',''].map(x=>cell(x,'center'))];
  add('materials',nodes('자재').map((n,i)=>{const r=n.rate,raw=materialSource(r,libraries);return row([i+1,r.name,r.spec||'',cell(r.unit,'center'),...Array.from({length:6},(_,j)=>[money(r.prices?.[j]??raw?.['Cost'+(j+1)]),r.quotePages?.[j]??raw?.['Page'+(j+1)]??'']).flat(),money(r.total),[itemRemark(r,raw),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join(' · ')]);}),[3,14,12,3,...Array(12).fill(4.6),6,6.8],materialHeads);
  add('labor',nodes('노임').map((n,i)=>row([i+1,n.rate.name,n.rate.spec||'',cell(n.rate.unit,'center'),money(n.rate.total),{...cell([priceBasisLabel(n.rate,'노임'),itemRemark(n.rate),n.printUsage&&'사용: '+n.printUsage].filter(Boolean).join('\n')),readable:true,fontSize:9}])),[5,27,20,8,15,25],[['No','직 종','규 격','단위','적용단가','적용 기준']]);
- const bundle={documents:Object.keys(printDocuments).map(k=>result[k]),warnings:[...(t.missing?[`단가·수량 미확정 ${t.missing}건 · 검토용 출력`]:[]),...graph.warnings],totals:t};bundle.native=nativeEstimateSheets(project,bundle);return bundle;
+ const bundle={documents:Object.keys(printDocuments).map(k=>result[k]),reviewLabel,warnings:[...(reviewLabel?[reviewLabel]:[]),...graph.warnings],totals:t};bundle.native=nativeEstimateSheets(project,bundle);return bundle;
 }
 export function estPrintSettings(value={}){
  const number=(n,def,min,max)=>{const x=Number(n??def);if(!Number.isFinite(x)||x<min||x>max)throw Error('인쇄 설정 범위를 확인하세요.');return x;};

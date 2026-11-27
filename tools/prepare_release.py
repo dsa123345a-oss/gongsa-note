@@ -13,6 +13,13 @@ from updater import ASSET, version_tuple
 from update_package import APP_EXE, runtime_name, package_files
 
 
+def verify_pdf_runtime(runtime):
+    # noarchive=True places Python modules directly inside the runtime directory.
+    for module in ('reportlab/pdfgen/canvas.pyc', 'reportlab/pdfbase/ttfonts.pyc', 'print_pdf.pyc'):
+        if not (runtime / module).is_file():
+            raise ValueError('PDF 생성 구성요소가 누락되어 배포할 수 없습니다: ' + module)
+
+
 def verify_default_databases(folder, config):
     allowed = {}
     for entry in config.get('defaultDatabases', []):
@@ -51,6 +58,7 @@ def main():
     bundled = json.loads((runtime / 'release.json').read_text(encoding='utf-8'))
     if bundled != config:
         raise ValueError('실행 파일과 소스의 배포 설정이 다릅니다. 다시 빌드하세요.')
+    verify_pdf_runtime(runtime)
     args.destination.mkdir(parents=True, exist_ok=True)
     asset = args.destination / ASSET
     runtime_files = sorted(p for p in runtime.rglob('*') if p.is_file())

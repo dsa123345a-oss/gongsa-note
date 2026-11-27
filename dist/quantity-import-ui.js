@@ -1,6 +1,6 @@
 import {readWorkbook,extractQuantities} from './workbook.js';
 import {supplementGovernmentQuantities} from './quantity-government.js';
-import {nextSectionNumber,quantitySiteName,buildQuantityProject,quantitySupplyFeeAvailability} from './quantity-batch.js';
+import {nextSectionNumber,quantitySiteName,quantityTitleConflict,quantityDuplicates,buildQuantityProject,quantitySupplyFeeAvailability} from './quantity-batch.js';
 import {sectionTitle} from './project-labels.js';
 import {previewSupplyFees,applySupplyFees} from './supply-fees.js';
 export function setupQuantityImport(api){
@@ -9,6 +9,25 @@ export function setupQuantityImport(api){
  $('sheetDialog').innerHTML=`<div class="dialog-head"><div><h2>수량산출서 가져오기</h2><p>파일 순서대로 공구를 만듭니다. 토공·관로도 등 중복 시트 대신 최종 수량 시트를 선택하세요.</p></div><button class="icon-btn" data-close="sheetDialog" aria-label="수량 가져오기 닫기">×</button></div><div class="quantity-batch-controls"><label>가져오기 방식 <select id="quantityMode"><option value="replace">현재 내역 교체</option><option value="append">기존 내역 뒤에 추가</option></select></label><label class="check"><input type="checkbox" id="quantityNumbered">공구별 L2 자동 번호</label><label>시작 공구 <input id="quantityStart" type="number" min="1" max="9999" value="1"></label><label>공사명 <input id="quantityContractTitle" value="상수도긴급보수공사" maxlength="100"></label></div><div class="quantity-batch-list table-wrap" id="quantityFiles"></div><p id="quantityPreviewTitle"></p><p id="quantityGovernmentNote" class="notice" hidden></p><div id="quantityPreview" class="table-wrap preview"></div><div class="dialog-actions"><span id="quantityPreviewCount"></span><button class="button primary" id="confirmQuantity">수량 가져오기</button></div>`;
  $('quantityFiles').insertAdjacentHTML('beforebegin',`<fieldset id="quantitySupplyFees" class="export-options"><label class="check"><input type="checkbox" id="quantitySupplyFeesEnabled">신규급수 수수료 함께 추가</label><span>동일 신청·설계·검사: 설계·자재검사·준공검사 각각 1건</span><div class="actions"><label>적용 계량기 구경 <input id="quantitySupplyFeeDiameter" type="number" min="1" max="2000" step="1" inputmode="numeric" style="width:90px" aria-label="수수료 적용 계량기 구경"> mm</label><button type="button" class="button small" id="quantitySupplyFeeConfirm">이 구경 사용</button><span>관급 계량기 중 가장 큰 구경 · 직접 수정 가능</span></div><p id="quantitySupplyFeeAmounts"></p><p id="quantitySupplyFeeHint" class="hint" role="status"></p></fieldset>`);
  const batchOptions=()=>({append:$('quantityMode').value==='append',numbered:$('quantityNumbered').checked,start:Number($('quantityStart').value),contractTitle:$('quantityContractTitle').value});
+ function selectSheet(entry,sheet){
+  entry.sheet=sheet;
+  entry.quantity=supplementGovernmentQuantities(entry.sheets,sheet);
+  entry.titleConflict=quantityTitleConflict(entry.quantity.title,entry.file);
+  entry.sourceSite=entry.titleConflict?.fileSite||quantitySiteName(entry.quantity.title,entry.file);
+  entry.site=entry.titleConflict?'':entry.sourceSite;
+  const fileNo=entry.file.match(/(\d+)\s*공구/)?.[1];
+  const inside=entry.sheets[sheet].rows.slice(0,5).flatMap(r=>Object.values(r.cells)).map(c=>String(c.value)).join(' ');
+  const sheetNo=inside.match(/(\d+)\s*공구/)?.[1];
+  entry.titleWarning=fileNo&&sheetNo&&fileNo!==sheetNo?`파일명 ${fileNo}공구 / 시트 ${sheetNo}공구 불일치`:'';
+  return entry;
+ }
+ const unresolvedTitles=()=>entries.some(e=>e.titleConflict&&!e.site.trim());
+ function updateValidity(){
+  const invalid=entries.some(e=>!e.quantity.rows.length),unresolved=unresolvedTitles();
+  const missing=entries.reduce((n,e)=>n+e.quantity.rows.filter(l=>l.qty===null).length,0);
+  $('quantityPreviewCount').textContent=`${entries.length}개 파일 · 미계산 ${missing}건${invalid?' · 수량 시트를 확인하세요.':''}${unresolved?' · 서로 다른 공사명 중 사용할 이름을 선택하세요.':''}`;
+  $('confirmQuantity').disabled=invalid||unresolved;
+ }
  const feeBasis=()=>feeDiameterTouched?'사용자 확인 계량기 구경 · 동일 신청·설계·검사 각각 1건':'수량산출서의 관급 계량기 중 최대 구경 · 동일 신청·설계·검사 각각 1건';
  const messages=values=>(values||[]).map(v=>typeof v==='string'?v:v.message||v.reason||'기존 수수료 확인 필요');
  function renderFees(rebuild=true){
@@ -20,7 +39,7 @@ export function setupQuantityImport(api){
   feePreview=null;
   if(!context.allowed){feeDraft=null;$('quantitySupplyFeeAmounts').textContent='';$('quantitySupplyFeeHint').textContent=context.reason;return;}
   try{
-   if(rebuild)feeDraft=buildQuantityProject(api.getProject(),entries,options);
+   if(rebuild)feeDraft=unresolvedTitles()?null:buildQuantityProject(api.getProject(),entries,{...options,allowDuplicates:true});
    if(!feeDraft)return;
    if(!feeDiameterTouched){const suggestion=previewSupplyFees(feeDraft,{infer:true});diameter.value=suggestion.suggestedDiameter??suggestion.diameter??'';}
    const selected=diameter.value.trim()?Number(diameter.value):undefined;
@@ -36,10 +55,27 @@ export function setupQuantityImport(api){
  }
  function render(){
   const numbered=$('quantityNumbered').checked,start=Number($('quantityStart').value);
+  const duplicates=new Map(quantityDuplicates(api.getProject(),entries,batchOptions()).map(d=>[d.index,d]));
   $('quantityStart').disabled=$('quantityContractTitle').disabled=!numbered;
-  $('quantityFiles').innerHTML='<table><thead><tr><th>공구</th><th>수량산출서 · 미리보기</th><th>수량 시트</th><th>L2 공사명에 넣을 현장명</th><th>순서</th></tr></thead><tbody>'+entries.map((e,i)=>`<tr class="${i===previewIndex?'quantity-current':''}"><td>${numbered?start+i+'공구':i+1}</td><td><button class="text-btn" data-quantity-preview="${i}">${esc(e.file)}</button><small>${e.quantity.rows.length}항목 · 미계산 ${e.quantity.rows.filter(l=>l.qty===null).length}건${e.titleWarning?" · "+esc(e.titleWarning):""}</small></td><td><select data-quantity-sheet="${i}" aria-label="${esc(e.file)} 수량 시트">${e.sheets.map((s,j)=>`<option value="${j}" ${j===e.sheet?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><input data-quantity-site="${i}" aria-label="${i+1}번째 파일 현장명" value="${esc(e.site)}" ${!numbered?'disabled':''}></td><td><button class="button small" data-quantity-move="${i}" data-step="-1" aria-label="${i+1}번째 파일 위로" ${i===0?'disabled':''}>↑</button><button class="button small" data-quantity-move="${i}" data-step="1" aria-label="${i+1}번째 파일 아래로" ${i===entries.length-1?'disabled':''}>↓</button></td></tr>`).join('')+'</tbody></table>';
+  const fileRows=entries.map((e,i)=>{
+   const duplicate=duplicates.get(i);
+   const titleChoices=e.titleConflict?`<select data-quantity-title="${i}" aria-label="${i+1}번째 파일 공사명 선택">
+    <option value="">파일명과 시트 공사명 중 선택</option>
+    <option value="file" ${e.site===e.titleConflict.fileSite?'selected':''}>파일명 · ${esc(e.titleConflict.fileSite)}</option>
+    <option value="sheet" ${e.site===e.titleConflict.sheetSite?'selected':''}>시트 · ${esc(e.titleConflict.sheetSite)}</option>
+   </select>`:'';
+   return `<tr class="${i===previewIndex?'quantity-current':''}"><td>${numbered?start+i+'공구':i+1}</td>
+    <td><button class="text-btn" data-quantity-preview="${i}">${esc(e.file)}</button>
+    <small>${e.quantity.rows.length}항목 · 미계산 ${e.quantity.rows.filter(l=>l.qty===null).length}건${e.titleWarning?' · '+esc(e.titleWarning):''}</small>
+    ${duplicate?`<small class="error-text">중복 확인 · ${esc(duplicate.prior)}</small>`:''}</td>
+    <td><select data-quantity-sheet="${i}" aria-label="${esc(e.file)} 수량 시트">${e.sheets.map((s,j)=>`<option value="${j}" ${j===e.sheet?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td>
+    <td>${titleChoices}<input data-quantity-site="${i}" aria-label="${i+1}번째 파일 현장명" value="${esc(e.site)}" ${!numbered&&!e.titleConflict?'disabled':''}></td>
+    <td><button class="button small" data-quantity-move="${i}" data-step="-1" aria-label="${i+1}번째 파일 위로" ${i===0?'disabled':''}>↑</button><button class="button small" data-quantity-move="${i}" data-step="1" aria-label="${i+1}번째 파일 아래로" ${i===entries.length-1?'disabled':''}>↓</button>
+    ${duplicate&&entries.length>1?`<button class="button small" data-quantity-remove="${i}">제외</button>`:''}</td></tr>`;
+  }).join('');
+  $('quantityFiles').innerHTML='<table><thead><tr><th>공구</th><th>수량산출서 · 미리보기</th><th>수량 시트</th><th>L2 공사명에 넣을 현장명</th><th>순서</th></tr></thead><tbody>'+fileRows+'</tbody></table>';
   const entry=entries[previewIndex],q=entry.quantity;
-  const name=numbered?sectionTitle(start+previewIndex,entry.site):q.title||entry.file;
+  const name=entry.titleConflict&&!entry.site?'사용할 공사명을 선택하세요.':numbered?sectionTitle(start+previewIndex,entry.site):entry.titleConflict?entry.site:q.title||entry.file;
   $('quantityPreviewTitle').textContent='L2 미리보기: '+name;
   const supplement=q.governmentSupplement,governmentNotes=[];
   if(supplement?.added)governmentNotes.push(`${supplement.sourceSheets.join(' · ')} 시트에서 관급자재 ${supplement.added}행을 함께 가져옵니다.`);
@@ -47,14 +83,31 @@ export function setupQuantityImport(api){
   governmentNotes.push(...(supplement?.warnings||[]));
   $('quantityGovernmentNote').hidden=!governmentNotes.length;$('quantityGovernmentNote').textContent=governmentNotes.join(' ');
   $('quantityPreview').innerHTML='<table><thead><tr><th>L1 공종</th><th>품명</th><th>규격</th><th>단위</th><th>수량</th><th>원본 셀</th></tr></thead><tbody>'+q.rows.map(l=>`<tr><td>${esc(l.group)}</td><td>${esc(l.name)}</td><td>${esc(l.spec)}</td><td>${esc(l.unit)}</td><td class="number">${l.qty===null?'<strong class="error-text">미계산</strong>':esc(l.qty)}</td><td>${esc(l.source)}</td></tr>`).join('')+'</tbody></table>';
-  const invalid=entries.some(e=>!e.quantity.rows.length);
-  $('quantityPreviewCount').textContent=`${entries.length}개 파일 · ${entries.reduce((n,e)=>n+e.quantity.rows.length,0)}항목 · 미계산 ${entries.reduce((n,e)=>n+e.quantity.rows.filter(l=>l.qty===null).length,0)}건 (미계산은 0으로 확정하지 않습니다) · 공구 L2 / 공종 L1${invalid?' · 수량이 없는 파일의 시트를 확인하세요.':''}`;
-  $('confirmQuantity').disabled=invalid;
+  updateValidity();
   renderFees();
  }
- $('quantityFiles').oninput=e=>{if(e.target.dataset.quantitySite!==undefined){entries[Number(e.target.dataset.quantitySite)].site=e.target.value;const i=Number(e.target.dataset.quantitySite);if(i===previewIndex)$('quantityPreviewTitle').textContent='L2 미리보기: '+sectionTitle(Number($('quantityStart').value)+i,e.target.value);}};
- $('quantityFiles').onchange=e=>{const i=e.target.dataset.quantitySheet;if(i!==undefined){const entry=entries[Number(i)];entry.sheet=Number(e.target.value);entry.quantity=supplementGovernmentQuantities(entry.sheets,entry.sheet);entry.site=quantitySiteName(entry.quantity.title,entry.file);previewIndex=Number(i);render();}};
- $('quantityFiles').onclick=e=>{const preview=e.target.closest('[data-quantity-preview]'),move=e.target.closest('[data-quantity-move]');if(preview){previewIndex=Number(preview.dataset.quantityPreview);render();}if(move){const i=Number(move.dataset.quantityMove),j=i+Number(move.dataset.step);if(j<0||j>=entries.length)return;[entries[i],entries[j]]=[entries[j],entries[i]];previewIndex=j;render();}};
+ $('quantityFiles').oninput=e=>{
+  if(e.target.dataset.quantitySite===undefined)return;
+  const i=Number(e.target.dataset.quantitySite),entry=entries[i];
+  entry.site=e.target.value;
+  if(i===previewIndex)$('quantityPreviewTitle').textContent='L2 미리보기: '+($('quantityNumbered').checked?sectionTitle(Number($('quantityStart').value)+i,entry.site):entry.site);
+  updateValidity();
+ };
+ $('quantityFiles').onchange=e=>{
+  if(e.target.dataset.quantitySheet!==undefined){
+   const i=Number(e.target.dataset.quantitySheet);
+   selectSheet(entries[i],Number(e.target.value));previewIndex=i;render();
+  }else if(e.target.dataset.quantityTitle!==undefined){
+   const i=Number(e.target.dataset.quantityTitle),entry=entries[i];
+   entry.site=entry.titleConflict[e.target.value+'Site']||'';previewIndex=i;render();
+  }
+ };
+ $('quantityFiles').onclick=e=>{
+  const preview=e.target.closest('[data-quantity-preview]'),move=e.target.closest('[data-quantity-move]'),remove=e.target.closest('[data-quantity-remove]');
+  if(preview){previewIndex=Number(preview.dataset.quantityPreview);render();}
+  if(move){const i=Number(move.dataset.quantityMove),j=i+Number(move.dataset.step);if(j<0||j>=entries.length)return;[entries[i],entries[j]]=[entries[j],entries[i]];previewIndex=j;render();}
+  if(remove&&entries.length>1){entries.splice(Number(remove.dataset.quantityRemove),1);previewIndex=Math.min(previewIndex,entries.length-1);render();}
+ };
  for(const id of ['quantityNumbered','quantityStart','quantityContractTitle'])$(id).onchange=()=>{if(id==='quantityNumbered'){feeChoiceTouched=false;feeDiameterTouched=false;}render();};
  $('quantityMode').onchange=()=>{feeChoiceTouched=false;feeDiameterTouched=false;$('quantityStart').value=$('quantityMode').value==='append'?nextSectionNumber(api.getProject()):1;render();};
  $('quantitySupplyFeesEnabled').onchange=()=>{feeChoiceTouched=true;renderFees(false);};
@@ -62,7 +115,10 @@ export function setupQuantityImport(api){
  $('quantitySupplyFeeConfirm').onclick=()=>{feeDiameterTouched=true;renderFees(false);};
  $('confirmQuantity').onclick=()=>{try{
   const append=$('quantityMode').value==='append';
-  let next=buildQuantityProject(api.getProject(),entries,batchOptions()),feeNote='';
+  if(unresolvedTitles())throw Error('서로 다른 공사명 중 사용할 이름을 선택하세요.');
+  const duplicates=quantityDuplicates(api.getProject(),entries,batchOptions());
+  if(duplicates.length&&!confirm('중복 가능성이 있는 수량산출서가 있습니다.\n\n'+duplicates.map(d=>d.file+' / 기존: '+d.prior).join('\n')+'\n\n별도 작업이 맞으면 확인을 눌러 포함하세요.'))return;
+  let next=buildQuantityProject(api.getProject(),entries,{...batchOptions(),allowDuplicates:duplicates.length>0}),feeNote='';
   if(!append&&api.getProject().lines.length&&!confirm('현재 내역을 이 수량산출서로 교체할까요? 되살리기로 복구할 수 있습니다.'))return;
   const context=quantitySupplyFeeAvailability(api.getProject(),entries,batchOptions());
   if(context.allowed&&$('quantitySupplyFeesEnabled').checked){
@@ -79,10 +135,12 @@ export function setupQuantityImport(api){
   const incoming=[];
   for(const f of [...files].sort((a,b)=>a.name.localeCompare(b.name,'ko',{numeric:true}))){
    if(f.size>40*1024*1024)throw Error(f.name+': 파일 크기는 40MB 이하만 지원합니다.');
-   let sheets;try{sheets=await readWorkbook(await f.arrayBuffer(),{fileName:f.name});}catch(e){throw Error(f.name+': '+e.message);}
+   const bytes=await f.arrayBuffer();
+   let sheets;try{sheets=await readWorkbook(bytes,{fileName:f.name});}catch(e){throw Error(f.name+': '+e.message);}
    let sheet=sheets.findIndex(s=>s.name==='수량');if(sheet<0)sheet=sheets.findIndex(s=>/수량/.test(s.name)&&extractQuantities(s).rows.length);if(sheet<0)sheet=0;
    if(!sheets.length)throw Error(f.name+': 읽을 시트가 없습니다.');
-   const quantity=supplementGovernmentQuantities(sheets,sheet),fileNo=f.name.match(/(\d+)\s*공구/)?.[1],inside=sheets[sheet].rows.slice(0,5).flatMap(r=>Object.values(r.cells)).map(c=>String(c.value)).join(' '),sheetNo=inside.match(/(\d+)\s*공구/)?.[1];incoming.push({file:f.name,sheets,sheet,quantity,titleWarning:fileNo&&sheetNo&&fileNo!==sheetNo?'파일명 '+fileNo+'공구 / 시트 '+sheetNo+'공구 불일치':'',site:quantitySiteName(quantity.title,f.name)});
+   const digest=globalThis.crypto?.subtle?Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join(''):undefined;
+   incoming.push(selectSheet({file:f.name,sheets,digest},sheet));
   }
   if(!incoming.length)return;entries=incoming;previewIndex=0;feeChoiceTouched=false;feeDiameterTouched=false;feeDraft=null;feePreview=null;
   $('quantityMode').value=api.getProject().lines.length?'append':'replace';

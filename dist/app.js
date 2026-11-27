@@ -31,7 +31,7 @@ import {setupRowSelection} from './row-selection.js';
 import {editBlock} from './work-core.js';
 import {setupLevels,hierarchyView} from './levels.js';
 import {setupDesktopToolbar} from './desktop-toolbar.js';
-import {setupAutoLink,pendingAuto,planAutoLinks,preferredLibrary} from './auto-link.js';
+import {setupAutoLink,pendingAuto,planAutoLinks,preferredLibrary,incompatibleAutoLinks,resetIncompatibleAutoLinks} from './auto-link.js';
 import {setupWorkflowTools} from './workflow-tools.js';
 import {budgetStatus} from './workflow-core.js';
 import {setupAdvancedTools} from './advanced-tools.js';
@@ -280,9 +280,14 @@ async function openProject(f,token=null){
    await put('libraries',next);libraries=next;
   }
   data=hydrateEstProjectMetadata(data,libraries).project;
+  const importedEst=/\.(estx|ebkx)$/i.test(f.name);
+  const repaired=importedEst?0:incompatibleAutoLinks(data).length;
+  const loaded={...newState(),...data};
   await projectFiles.activate(token);
-  project={...newState(),...data};projectHistory=createProjectHistory(project);group='';selectedLineId=null;$('statusFilter').value='';
-  render();changed();if(!/\.(estx|ebkx)$/i.test(f.name))savedProject.markSaved(project);else savedProject.markSaved(newState());toast('공사 내역을 열었습니다.'+(data.estImport?' EST 원본은 보존되며, 저장하면 공사노트 파일로 저장됩니다.':''));
+  project=repaired?resetIncompatibleAutoLinks(loaded):loaded;projectHistory=createProjectHistory(project);group='';selectedLineId=null;$('statusFilter').value='';
+  render();changed();
+  savedProject.markSaved(importedEst?newState():repaired?loaded:project);
+  toast(repaired?`공사 내역을 열었습니다. 미검토 오연결 ${repaired}건을 해제했으니 단가를 확인하세요.`:'공사 내역을 열었습니다.'+(data.estImport?' EST 원본은 보존되며, 저장하면 공사노트 파일로 저장됩니다.':''));
  }catch(e){toast(e.message);}finally{idle();openingProject=false;$('projectInput').value='';}
 }
 const estReportButton=document.createElement('button');estReportButton.id='estImportReport';estReportButton.style.display='none';document.body.append(estReportButton);
